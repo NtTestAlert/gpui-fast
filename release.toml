@@ -1,20 +1,23 @@
-# Metadata applied only to target/release-workspace, never upstream manifests.
+# Metadata applied only to the generated distribution workspace.
 snapshot_version = "0.3.12"
-repository = "https://github.com/longbridge/gpui-fast"
-homepage = "https://github.com/longbridge/gpui-fast"
-# zed-scap's Windows backend requires the five-argument capture settings API.
-windows_capture_version = "=1.4.2"
-# Upstream pins a wgpu git revision for its unreleased Vulkan surface-drop fix
-# (gfx-rs/wgpu#10230), which crates.io cannot take. Releases use this registry
-# version instead, with gpui_wgpu adapted to it; drop both once a release
-# ships the fix and upstream moves to it.
-wgpu_version = "=30.0.1"
+upstream_tag = "v0.1.14"
+upstream_commit = "a427a7d9a6072473ad092b1673cd5235f99284cc"
+source_ref = "refs/heads/atrophy-gpui-fast-0.1.14"
+source_commit = "056ef5dd4da8d55607eab9205bf463262d8305b6"
+# Scap uses the five-argument Settings API; 1.5 introduced extra arguments.
+# A root-exposed capture feature can constrain the lock even while disabled.
+windows_capture_requirement = ">=1.3.6, <1.5.0"
+repository = "https://github.com/NtTestAlert/gpui-fast"
+homepage = "https://github.com/NtTestAlert/gpui-fast"
+# The unpublished Git distribution preserves upstream's pinned wgpu dependency,
+# including its Vulkan surface-drop fix (gfx-rs/wgpu#10230).
 
 # Dependencies come before their consumers.
 crates = [
     "gpui_macros",
     "gpui",
     "gpui_apple",
+    "gpui_ios",
     "gpui_wgpu",
     "gpui_macos",
     "gpui_linux",

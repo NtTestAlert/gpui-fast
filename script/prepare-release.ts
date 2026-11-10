@@ -1,9 +1,12 @@
 #!/usr/bin/env bun
-// Generate registry-only release manifests without touching upstream files.
+// Generate unpublished Git distribution manifests without touching source files.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { extname, relative, resolve, sep } from "node:path";
+import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
-import { DEST, ROOT, fastName, readConfig, readToml, run, type Manifest, type ReleaseConfig } from "./release-common";
+import { stringify } from "smol-toml";
+import { DEST, ROOT, fastName, readConfig, readToml, type Manifest, type ReleaseConfig } from "./release-common";
+import { forkReadme, inspectSource, sourceChanges } from "./release-provenance";
+import { verifyGpuDependencies } from "./release-dependencies";
 
 export function versionFromTag(tag: string): string {
   const match = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(tag);
@@ -40,54 +43,47 @@ export function dependency(key: string, input: any, workspace: Manifest, config:
       : { package: snapshotName(key), version: "=" + config.snapshot_version });
   }
   if ("git" in value) {
-    if (key === "wgpu") value.version = config.wgpu_version;
-    if (!value.version) {
-      if (key !== "proptest") throw new Error(`${key}: Git dependency has no registry version`);
-      value.version = "1";
+    if (!/^[0-9a-f]{40}$/.test(value.rev) || value.branch || value.tag) {
+      throw new Error(key + " must retain an immutable upstream Git revision");
     }
-    for (const field of ["git", "rev", "branch", "tag"]) delete value[field];
   }
   return value;
 }
 
-/** Adapts the unreleased wgpu APIs upstream uses to `config.wgpu_version`. */
-export function adaptToReleasedWgpu(source: string): string {
-  const adapted = source
-    .replace(/^[ \t]*default_queue: wgpu::QueueDescriptor::default\(\),\r?\n/gm, "")
-    .replaceAll(".has_srgb_suffix()", ".is_srgb()");
-  if (adapted.includes("default_queue") || adapted.includes("QueueDescriptor")) {
-    throw new Error("gpui_wgpu's wgpu queue configuration changed; review adaptToReleasedWgpu");
-  }
-  return adapted;
-}
-
-export function prepare(config: ReleaseConfig, version: string, dest = DEST): void {
+export function prepare(config: ReleaseConfig, version: string, dest = DEST, root = ROOT, sourcePatches = false): void {
   versionFromTag("v" + version);
-  const workspace = readToml(resolve(ROOT, "Cargo.toml")).workspace;
+  const output = relative(resolve(root), resolve(dest)).replaceAll("\\", "/");
+  if (isAbsolute(output) || (output !== "distribution" && !output.startsWith("target/"))) {
+    throw new Error("Distribution output must be distribution/ or inside target/ in the source checkout");
+  }
+  const provenance = { ...inspectSource(config, root), applies_registry_patches: sourcePatches };
+  const changes = sourceChanges(config, provenance, root);
+  const workspace = readToml(resolve(root, "Cargo.toml")).workspace;
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
-  writeFileSync(resolve(dest, "Cargo.toml"), Bun.TOML.stringify({
-    workspace: { resolver: "2", members: config.crates },
+  writeFileSync(resolve(dest, "Cargo.toml"), stringify({
+    workspace: { resolver: "2", members: config.crates, metadata: { "gpui-fast-fork": provenance } },
+    ...(sourcePatches ? { patch: provenance.registry_patches } : {}),
   }));
-  cpSync(resolve(ROOT, "rust-toolchain.toml"), resolve(dest, "rust-toolchain.toml"));
+  cpSync(resolve(root, "rust-toolchain.toml"), resolve(dest, "rust-toolchain.toml"));
 
   for (const name of config.crates) {
-    const source = resolve(ROOT, "crates", name);
+    const source = resolve(root, "crates", name);
     const target = resolve(dest, name);
-    cpSync(source, target, { recursive: true });
+    cpSync(source, target, { recursive: true, dereference: true });
     const manifest = readToml(resolve(source, "Cargo.toml"));
     const pkg = manifest.package;
     Object.assign(pkg, {
-      name: fastName(name), version, publish: ["crates-io"],
+      name: fastName(name), version, publish: false,
       edition: workspace.package.edition, repository: config.repository,
       homepage: config.homepage, readme: "README.md", license: "Apache-2.0",
-      documentation: `https://docs.rs/${fastName(name)}/${version}/${name}/`,
+      documentation: config.repository,
       description: `${name}: GPUI with gpui-fast rendering and layout optimizations`,
       autoexamples: false, autobenches: false, autotests: false,
       authors: [...new Set([...(pkg.authors ?? []), "Longbridge"])],
       include: ["/src/**", "/resources/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE", "/NOTICE"],
     });
-    delete pkg.metadata;
+    pkg.metadata = { "gpui-fast-fork": provenance };
     manifest.lib.name = name;
     for (const field of ["lints", "example", "bench", "test", "dev-dependencies"]) delete manifest[field];
     // Published crates have no workspace to inherit lints from; keep its rustc
@@ -101,28 +97,24 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
         );
       }
     }
-    // zed-scap allows windows-capture 1.5, whose settings API is incompatible.
-    // A direct registry constraint also reaches consumers without a root patch.
     if (name === "gpui") {
       manifest.target ??= {};
       const windows = manifest.target['cfg(target_os = "windows")'] ??= {};
       windows.dependencies ??= {};
       windows.dependencies["windows-capture"] = {
-        version: config.windows_capture_version, optional: true,
+        version: config.windows_capture_requirement, optional: true,
       };
       manifest.features["screen-capture"].push("dep:windows-capture");
     }
+    verifyGpuDependencies(manifest, provenance);
     writeFileSync(resolve(target, "Cargo.toml"),
-      "# Modified by Longbridge for gpui-fast publication.\n" + Bun.TOML.stringify(manifest));
-    cpSync(resolve(ROOT, "LICENSE"), resolve(target, "LICENSE"));
-    const notices = [resolve(ROOT, "NOTICE"), resolve(source, "NOTICE")]
+      "# Modified by Longbridge for gpui-fast publication.\n"
+      + "# Modified by NtTestAlert for the GPUI Fast fork.\n" + stringify(manifest));
+    cpSync(resolve(root, "LICENSE"), resolve(target, "LICENSE"));
+    const notices = [resolve(root, "NOTICE"), resolve(source, "NOTICE")]
       .filter(existsSync).map(path => readFileSync(path, "utf8"));
     if (notices.length) writeFileSync(resolve(target, "NOTICE"), notices.join("\n\n"));
-    writeFileSync(resolve(target, "README.md"),
-      `# ${fastName(name)}\n\nGPUI with gpui-fast rendering and layout optimizations.\n\n`
-      + `Source and documentation: [${config.repository}](${config.repository}).\n\n`
-      + "Forked from Zed's GPUI; distributed under Apache-2.0.\n\n"
-      + `Use the core as \`gpui = { package = "gpui-fast", version = "${version}" }\` to preserve paths emitted by its macros.\n`);
+    writeFileSync(resolve(target, "README.md"), forkReadme(name, config, provenance));
   }
 
   // cbindgen must read bundled inputs rather than a sibling registry package.
@@ -130,10 +122,10 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
   const bundled = resolve(apple, "src/fast/release_gpui/src");
   mkdirSync(bundled, { recursive: true });
   for (const file of ["scene.rs", "geometry.rs", "color.rs", "window.rs", "platform.rs"]) {
-    cpSync(resolve(ROOT, "crates/gpui/src", file), resolve(bundled, file));
+    cpSync(resolve(root, "crates/gpui/src", file), resolve(bundled, file));
   }
   for (const directory of ["window", "platform"]) {
-    cpSync(resolve(ROOT, "crates/gpui/src", directory), resolve(bundled, directory), { recursive: true });
+    cpSync(resolve(root, "crates/gpui/src", directory), resolve(bundled, directory), { recursive: true });
   }
   const build = resolve(apple, "build.rs");
   const original = readFileSync(build, "utf8");
@@ -144,29 +136,16 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
   writeFileSync(build, "// Modified for gpui-fast releases: bundle cbindgen inputs inside this package.\n"
     + original.replace(needle, '.join("src/fast/release_gpui")'));
 
-  const adapted = new Bun.Glob("**/*.rs").scanSync(resolve(dest, "gpui_wgpu/src"));
-  for (const file of [...adapted].map(path => resolve(dest, "gpui_wgpu/src", path))) {
-    const original = readFileSync(file, "utf8");
-    const source = adaptToReleasedWgpu(original);
-    if (source !== original) {
-      writeFileSync(file, `// Modified for gpui-fast releases: adapted to wgpu ${config.wgpu_version}.\n` + source);
-    }
-  }
-  console.warn(`wgpu: releasing against ${config.wgpu_version}, without upstream's unreleased`
-    + " Vulkan surface-drop fix (gfx-rs/wgpu#10230)");
-
   // Apache-2.0 section 4(b) requires change notices in distributed copies.
-  const upstream = readToml(resolve(ROOT, "UPSTREAM"));
-  const changed = run([
-    "git", "diff", "--name-only", upstream.import_commit, "--", ...config.crates.map(name => "crates/" + name),
-  ], true).trim().split(/\r?\n/).filter(Boolean);
-  for (const filename of changed) {
-    const parts = relative(resolve(ROOT, "crates"), resolve(ROOT, filename)).split(sep);
-    const distributed = [resolve(dest, ...parts)];
-    if (parts[0] === "gpui" && parts[1] === "src") distributed.push(resolve(bundled, ...parts.slice(2)));
-    for (const file of distributed) {
-      if (existsSync(file) && statSync(file).isFile() && [".rs", ".metal", ".wgsl", ".hlsl"].includes(extname(file))) {
-        writeFileSync(file, "// Modified by Longbridge for gpui-fast.\n" + readFileSync(file, "utf8"));
+  for (const { files, notice } of changes) {
+    for (const filename of files) {
+      const parts = relative(resolve(root, "crates"), resolve(root, filename)).split(sep);
+      const distributed = [resolve(dest, ...parts)];
+      if (parts[0] === "gpui" && parts[1] === "src") distributed.push(resolve(bundled, ...parts.slice(2)));
+      for (const file of distributed) {
+        if (existsSync(file) && statSync(file).isFile() && [".rs", ".metal", ".wgsl", ".hlsl"].includes(extname(file))) {
+          writeFileSync(file, notice + "\n" + readFileSync(file, "utf8"));
+        }
       }
     }
   }
@@ -175,11 +154,14 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
 
 if (import.meta.main) {
   try {
-    const { values } = parseArgs({ args: Bun.argv.slice(2), options: { tag: { type: "string" }, help: { type: "boolean" } } });
-    if (values.help) console.log("Usage: bun script/prepare-release.ts --tag v0.1.0");
+    const { values } = parseArgs({ args: Bun.argv.slice(2), options: {
+      tag: { type: "string" }, dest: { type: "string" }, "source-patches": { type: "boolean" }, help: { type: "boolean" },
+    } });
+    if (values.help) console.log("Usage: bun script/prepare-release.ts --tag v0.1.14 [--dest target/comparison] [--source-patches]");
     else {
       if (!values.tag) throw new Error("--tag is required (first release: v0.1.0)");
-      prepare(readConfig(), versionFromTag(values.tag));
+      prepare(readConfig(), versionFromTag(values.tag), values.dest ? resolve(ROOT, values.dest) : DEST,
+        ROOT, values["source-patches"] ?? false);
     }
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);

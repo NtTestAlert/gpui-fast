@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { adaptToReleasedWgpu, dependency } from "./prepare-release";
+import { stringify } from "smol-toml";
+import { dependency } from "./prepare-release";
 import { validate } from "./publish-release";
 import { fastName, readConfig, readToml } from "./release-common";
 
@@ -29,11 +30,11 @@ test("publication validates caret sibling requirements and rejects exact pins", 
       gpui_macros: dependency("gpui_macros", { path: "unused" }, {}, config, "0.1.6"),
     };
     for (const crate of release.crates) {
-      writeFileSync(resolve(root, crate, "Cargo.toml"), Bun.TOML.stringify(manifests[crate]));
+      writeFileSync(resolve(root, crate, "Cargo.toml"), stringify(manifests[crate]));
     }
     expect(validate(release, root)).toBe("0.1.6");
     manifests.gpui_platform.dependencies.gpui_macros.version = "=0.1.6";
-    writeFileSync(resolve(root, "gpui_platform/Cargo.toml"), Bun.TOML.stringify(manifests.gpui_platform));
+    writeFileSync(resolve(root, "gpui_platform/Cargo.toml"), stringify(manifests.gpui_platform));
     expect(() => validate(release, root)).toThrow("gpui_platform: inconsistent sibling version");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -60,22 +61,22 @@ test("release dependencies retain inherited features and pin support snapshots",
   });
 });
 
-test("release dependencies replace wgpu's Git revision with its registry release", () => {
+test("Git distribution dependencies preserve wgpu's exact upstream revision and features", () => {
   const workspace = { dependencies: { wgpu: {
     git: "https://github.com/gfx-rs/wgpu", rev: "3b3506ea31154edc04de64debda0e780cba2639c",
     "default-features": false,
   } } };
   expect(dependency("wgpu", { workspace: true, features: ["wgsl"] }, workspace, config, "0.1.5")).toEqual({
-    version: config.wgpu_version, "default-features": false, features: ["wgsl"],
+    git: "https://github.com/gfx-rs/wgpu", rev: "3b3506ea31154edc04de64debda0e780cba2639c",
+    "default-features": false, features: ["wgsl"],
   });
 });
 
-test("gpui_wgpu is adapted to the registry wgpu, and unknown queue setup is refused", () => {
-  const descriptor = "wgpu::DeviceDescriptor {\n    label: None,\n    default_queue: wgpu::QueueDescriptor::default(),\n}\n";
-  expect(adaptToReleasedWgpu(descriptor)).toBe("wgpu::DeviceDescriptor {\n    label: None,\n}\n");
-  expect(adaptToReleasedWgpu("!format.has_srgb_suffix()")).toBe("!format.is_srgb()");
-  expect(() => adaptToReleasedWgpu(descriptor.replace("::default()", " { label: None }")))
-    .toThrow("queue configuration changed");
+test("Git distribution dependencies reject moving wgpu revisions", () => {
+  for (const source of [{ branch: "trunk" }, { rev: "short" }, { tag: "v30.0.1" }]) {
+    expect(() => dependency("wgpu", { git: "https://github.com/gfx-rs/wgpu", ...source }, {}, config, "0.1.14"))
+      .toThrow("immutable upstream Git revision");
+  }
 });
 
 test("Cargo can update only gpui-fast while its platform remains locked", () => {
@@ -90,14 +91,14 @@ test("Cargo can update only gpui-fast while its platform remains locked", () => 
   const writePackage = (name: string, version: string, dependencies = {}, source = "") => {
     const dir = resolve(root, name + "-" + version);
     mkdirSync(resolve(dir, "src"), { recursive: true });
-    writeFileSync(resolve(dir, "Cargo.toml"), Bun.TOML.stringify({
+    writeFileSync(resolve(dir, "Cargo.toml"), stringify({
       package: { name, version, edition: "2021" }, dependencies,
     }));
     writeFileSync(resolve(dir, "src/lib.rs"), source);
     patches[name + "-" + version.replaceAll(".", "-")] = { package: name, path: dir };
   };
   const writeConsumer = () => {
-    writeFileSync(resolve(root, "Cargo.toml"), Bun.TOML.stringify({
+    writeFileSync(resolve(root, "Cargo.toml"), stringify({
       package: { name: "consumer", version: "0.0.0", edition: "2021" },
       dependencies: { gpui: { package: "gpui-fast", version: "0.1.5" },
         platform: { package: "gpui-fast-platform", version: "0.1.5" } },

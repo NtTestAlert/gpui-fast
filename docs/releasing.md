@@ -1,114 +1,174 @@
-# Publishing gpui-fast
+# Preparing the GPUI Fast Git distribution
 
-The release workflow publishes nine crates to crates.io: `gpui-fast`,
-`gpui-fast-macros`, `gpui-fast-apple`, `gpui-fast-wgpu`, `gpui-fast-macos`,
-`gpui-fast-linux`, `gpui-fast-windows`, `gpui-fast-web` and `gpui-fast-platform`.
-The macro crate preserves upstream's generated `gpui::` paths, including when
-an application also depends on GPUI Kit. Unmodified support crates use the
-published `gpui-pre-*` snapshot pinned in `release.toml`.
+This fork distributes generated packages through an immutable Git commit.
+It does not publish them to crates.io. The upstream registry publication
+workflow and script/publish-release.ts do not validate this fork's Git output:
+the packages intentionally set publish = false and retain Git dependencies.
 
-## Versions and triggers
+The generated package set contains ten crates: gpui-fast, gpui-fast-macros,
+gpui-fast-apple, gpui-fast-ios, gpui-fast-wgpu, gpui-fast-macos, gpui-fast-linux,
+gpui-fast-windows, gpui-fast-web and gpui-fast-platform. The iOS package must
+remain in this set so the Fast platform returns the same GPUI types as its
+iOS implementation. Inclusion does not establish iOS build or runtime support.
 
-The first release is `v0.1.0`. Every release version comes from its Git tag;
-neither upstream Cargo manifests nor `release.toml` store the release version.
-Tags must point to commits already merged into `main`.
+## Source and dependency provenance
 
-1. Configure the repository Actions secret `CARGO_REGISTRY_TOKEN` with a
-   crates.io token permitted to publish all nine package names. The first
-   publication also needs permission to create those packages.
-2. Merge the release workflow and subsequent release changes through a PR.
-3. Create and push a tag on the desired commit:
+release.toml pins an upstream tag and commit independently of the generated
+package version and pins the reviewed source commit separately. Later
+packaging-only commits may regenerate that same source; their guarded source
+inputs must match the configured commit. Generation rejects dirty or untracked source inputs, hidden index
+flags, symlink checkout stubs, and changes to support crates that would otherwise
+be replaced by registry snapshots. Delegated helpers must not depend on
+distributed backend types; this is why the iOS crate is included. Unmodified support packages remain pinned
+to the exact gpui-pre snapshot.
 
-   ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
+Generated manifests and READMEs record the source commit, upstream base,
+Zed import, support snapshot, wgpu revision and consumer workspace patches.
+Source and distribution commits are distinct. Source links describe the
+expected remote location; generation alone does not verify publication.
+Before releasing the distribution, verify its source is fetchable:
 
-Pushing `v*` runs validation on Linux, macOS and Windows, checks the Web
-backend on nightly (matching upstream's Web example), and then publishes in
-dependency order. Cargo verifies each unpacked package before uploading it
-and waits until its version is available in the registry index.
+~~~sh
+bun script/verify-source-publication.ts
+~~~
 
-Changes to release configuration also run the validation jobs on pull requests,
-using version `0.999.0` for rehearsal, above any published release so that
-sibling requirements resolve to the packages being rehearsed rather than to
-releases on crates.io; the publish job is disabled for PRs.
-Validation includes `cargo publish --workspace --dry-run`, which packages and
-builds all nine archives against Cargo's temporary registry without uploading
-anything. Packaging the entire workspace supports unpublished sibling packages.
-The `release-crates` Actions artifact contains the nine rehearsed `.crate`
-archives for inspection.
+This read-only command checks the configured source branch or tag against the
+generated source SHA. It must pass before publishing the distribution commit.
 
-After the workflow is merged into `main`, it can also be run manually against
-an existing tag. `dry_run` defaults to true and runs the same rehearsal. Pushing
-a release tag starts a real release automatically, so use PR validation or
-local rehearsal to test before creating that tag.
+Every direct Git dependency retains its exact source revision. In particular,
+wgpu keeps upstream's queue and texture APIs and its Vulkan surface-drop fix;
+the generator does not adapt its Rust source to registry wgpu APIs. GPUI Kit
+also brings standard renderer dependencies into Fast Linux and Web graphs, so
+both the Fast Git and standard registry wgpu stacks can compile.
 
-## Release-only changes
+Default generation applies no shared-crate patch table and leaves existing
+registry requirements unchanged except for the Windows capture compatibility
+bound described below. It adds no calloop or async-task exact constraint.
 
-`bun script/prepare-release.ts --tag v0.1.0` generates `target/release-workspace`.
-Only these generated copies receive package names, compatible sibling versions,
-registry dependency substitutions, repository/homepage URLs, descriptions,
-READMEs and license files. Original manifests and Rust source stay unchanged.
-Published metadata retains upstream authors and adds Longbridge;
-the bundled license retains Zed's copyright and credits Longbridge's contributions.
-Generated copies of changed source files carry modification notices, and any
-root or crate NOTICE files are included in the corresponding package.
-Release manifests do not inherit workspace Git patches. The Apple package
-bundles the GPUI source inputs used by cbindgen so its shader build does not
-depend on a sibling checkout directory.
-Upstream pins wgpu to a Git revision for its unreleased Vulkan surface-drop
-fix (gfx-rs/wgpu#10230). Release manifests use the registry version in
-`release.toml` (`wgpu_version`) instead, and the generated `gpui_wgpu` sources
-are adapted to it; preparation fails if upstream's wgpu usage changes in a way
-the adaptation does not cover. Published crates lack that fix until a wgpu
-release ships it.
-The core's Windows screen-capture feature constrains `windows-capture` to
-the registry version in `release.toml`; version 1.5 changed the constructor
-used by `zed-scap` and cannot compile that backend.
+The Fast core adds an optional windows-capture requirement >=1.3.6, <1.5,
+activated only with screen-capture. Scap uses five Settings::new arguments;
+windows-capture 1.5.0 requires eight. Lock resolution considers features exposed
+by the consuming workspace root. In a root that exposed screen-capture but left
+it disabled, a controlled comparison changed the shared capture lock entry from
+1.5.0 to 1.4.4 and left every other package ID unchanged. A separate genuinely
+plain Kit/Component root, without that feature or capture-specific aliases,
+retained 1.5.0 despite using the same bounded Fast packages. The generated
+workspace itself exposes the core crate's features and is a different root.
 
-Sibling dependencies use Cargo caret requirements such as `^0.1.6`. This allows
-`cargo update -p gpui-fast` to update the core and its required dependencies
-while compatible platform packages remain locked. For `0.1.x`, the requirement
-allows newer patch releases but excludes `0.2.0`; breaking changes must use a
-new compatibility series. Support snapshots (`gpui-pre-*`) remain exactly pinned.
-Versions already published with exact sibling requirements cannot be changed.
-Consumers must first update the full `gpui-fast-*` set to a release using caret
-requirements before subsequent core-only updates can work.
+When this bound participates in resolution, standard and Fast capture paths
+share the resulting lock entry. The default Windows target tree of the
+capture-exposing probe did not include Scap or windows-capture, so this lock
+effect did not activate capture compilation. These probes do not establish the
+effect on Atrophy or another application's lock; check its actual root separately.
 
-Applications should alias the released libraries to their original names:
+The generated metadata and READMEs separately offer optional source-parity
+patches for async-process, async-task, windows-capture, calloop and khronos-egl.
+Moving patches are pinned to the source lock revision. An optional wasm_thread
+patch aligns the registry scheduler's worker implementation with Fast Web's
+direct Git worker dependency. Use --source-patches only for an explicitly
+separate comparison; these root patches affect every backend in that workspace.
+They do not guarantee the resolver selects a patched candidate over a newer
+registry version. Confirm the actual lockfile and tree.
 
-```toml
-[dependencies]
-gpui = { package = "gpui-fast", version = "0.1.0" }
-gpui_platform = { package = "gpui-fast-platform", version = "0.1.0", features = ["wayland", "x11"] }
-```
+Without those patches, Linux EGL error/idle handling, async scheduling/process
+fixes, Web worker bootstrap and Windows capture behavior may differ from the
+source workspace. This is not a demonstrated build failure for every default
+consumer. The source lock selects windows-capture 1.4.3, while scap's registry
+requirement alone would permit newer versions with a changed Settings API.
+The bounded Fast dependency prevents selecting 1.5.0; check the resolved version
+and compile screen-capture explicitly before advertising capture support.
+Web compilation alone does not validate worker bootstrap.
 
-Published crates cannot themselves change which GPUI version an existing
-GPUI Kit dependency uses. GPUI Kit also needs to select the same fast core
-before their GPUI types can be mixed.
+Cargo does not inherit dependency-workspace patches. Optional patches belong
+in the consuming workspace root only when the owner chooses them. The default
+alias snippet requires no such shared-crate patches. Replace
+DISTRIBUTION_COMMIT_SHA with the published distribution SHA, not the source SHA.
+Kit consumers must override all ten gpui-fast packages to that same revision.
 
-## Local validation
+## Preparation and verification
 
-Run from the repository root:
+Install the toolchain named by rust-toolchain.toml and the frozen generator
+dependency. Run from this repository's root:
 
-```sh
-bun test script/release.test.ts
-bun script/prepare-release.ts --tag v0.1.0
-bun script/publish-release.ts
-cargo check --manifest-path target/release-workspace/Cargo.toml --workspace --lib --all-features
-bun script/publish-release.ts --dry-run
-```
+~~~sh
+bun install --frozen-lockfile
+bun test script/release.test.ts script/release-provenance.test.ts script/release-dependencies.test.ts
+bun script/prepare-release.ts --tag v0.1.14
+python script/check-upstream
+~~~
 
-Preparation replaces the previous generated directory, including its build
-outputs. Inspect `release.toml` when syncing upstream: new path dependencies
-need either a compatible published snapshot or a new entry in the release
-set; Git dependencies need compatible registry releases.
+Preparation replaces distribution/. A custom destination must be inside
+target/. Generate a second copy there and compare every relative path and file
+hash; record the source commit, generator diff and comparison result.
+The generator uses Bun's TOML parser and the frozen smol-toml serializer.
 
-If publication stops midway, rerun the workflow with the same tag and
-`dry_run` disabled. Already published packages are skipped only when their
-archive checksum matches; yanked versions and differing contents fail and
-require a new version tag. Registry or authentication errors stop the run.
+Run standalone generated-workspace checks, rather than relying only on the
+source workspace:
 
-CI pins Bun 1.4.2. The release scripts use Bun's built-in TOML parser and
-serializer and require no npm packages.
+~~~sh
+cargo check --manifest-path distribution/Cargo.toml --workspace --lib
+cargo check --manifest-path distribution/Cargo.toml -p gpui-fast-wgpu --lib
+~~~
+
+Create two independent GPUI Kit/Component 0.9.1 consumers with separate
+lockfiles. Both override the ten Fast packages; only the second opts into
+shared source-parity patches:
+
+~~~sh
+bun script/prepare-consumer.ts --dest target/consumer-default
+bun script/prepare-consumer.ts --dest target/consumer-source-patches --source-patches
+bun script/prepare-consumer.ts --dest target/consumer-capture --capture
+cargo check --manifest-path target/consumer-default/Cargo.toml --lib
+cargo check --manifest-path target/consumer-source-patches/Cargo.toml --lib
+cargo tree --manifest-path target/consumer-default/Cargo.toml --target x86_64-pc-windows-msvc > target/consumer-default/tree-windows.txt
+cargo tree --manifest-path target/consumer-source-patches/Cargo.toml --target x86_64-pc-windows-msvc > target/consumer-source-patches/tree-windows.txt
+~~~
+
+Compare both Cargo.lock files and target-specific trees. Record exact source
+identities for async-process, async-task, calloop, khronos-egl, windows-capture,
+wasm_thread, the ten Fast packages, standard support and both GPU stacks.
+Repeat tree/metadata comparisons for x86_64-unknown-linux-gnu,
+aarch64-apple-darwin, aarch64-apple-ios and wasm32-unknown-unknown.
+Graph resolution does not replace compilation or runtime checks on those hosts.
+
+The default probes contain no root screen-capture feature. Compare their lock
+resolution with the separate capture-exposing probe before enabling that feature.
+On Windows run the capture probe explicitly:
+
+~~~sh
+cargo check --manifest-path target/consumer-capture/Cargo.toml --lib --features screen-capture
+~~~
+
+Prepare a separate --capture --source-patches probe when comparing optional
+patch mode. Record the resolved requirement/version and actual compiler result.
+For Web, check both modes with a suitable nightly toolchain and the wasm target,
+inspect whether the scheduler and Fast dispatcher share a worker package
+identity, and exercise worker startup in a browser before claiming it works.
+
+Source shader tests retain their direct Naga dev-dependency and belong in
+the source workspace. A Windows check of gpui-fast-wgpu verifies APIs but
+does not exercise Linux Vulkan. Linux Vulkan device-loss/surface-destruction,
+macOS Metal, iOS and Web compilation/runtime need suitable hosts or toolchains;
+record unavailable checks explicitly.
+
+The fork's workflow validates generated/default-consumer graphs on manual and
+pull-request runs. It has no tag-triggered or crates.io publication job; optional
+feature and runtime evidence still needs explicit recording.
+
+After the reviewed distribution branch is published, dispatch its workflow
+explicitly using that topic ref:
+
+~~~sh
+gh workflow run release.yml --repo NtTestAlert/gpui-fast --ref atrophy-dist-0.1.14
+~~~
+
+workflow_dispatch requires this workflow file to exist on the repository's
+default branch. If that prerequisite is absent, open a topic-base PR from
+atrophy-dist-0.1.14 into atrophy-gpui-fast-0.1.14 so the pull_request trigger
+validates the proposed workflow without merging it into main. Record the actual
+Actions run URL and conclusion; a local YAML parse is not an executed CI pass.
+
+Review source changes and generated artifacts before committing or publishing
+the corresponding fork branches. Do not treat a successful source build,
+synthetic generator fixture, or Windows DirectX run as a substitute for these
+standalone and platform-specific checks.

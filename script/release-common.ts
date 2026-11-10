@@ -3,14 +3,17 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const DEST = resolve(ROOT, "target/release-workspace");
+export const DEST = resolve(ROOT, "distribution");
 
 export interface ReleaseConfig {
   snapshot_version: string;
+  upstream_tag: string;
+  upstream_commit: string;
+  source_ref: string;
+  source_commit: string;
+  windows_capture_requirement: string;
   repository: string;
   homepage: string;
-  windows_capture_version: string;
-  wgpu_version: string;
   crates: string[];
 }
 
