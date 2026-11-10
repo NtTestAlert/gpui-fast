@@ -4,6 +4,7 @@ mod a11y;
 mod cached_layout;
 mod dependencies;
 mod dispatch;
+mod element_storage;
 mod global_id;
 mod layers;
 mod layers_lists;

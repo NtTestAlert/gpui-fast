@@ -5,6 +5,99 @@ use crate::fast::dependencies::merge_sorted;
 use std::rc::Rc;
 
 #[test]
+fn retained_reads_follow_mounted_children_and_open_windows() {
+    use std::cell::Cell;
+
+    use crate::{
+        AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, StyleRefinement,
+        Styled as _, TestAppContext, Window, div, px,
+    };
+
+    struct Reader {
+        shared: Entity<usize>,
+        builds: Rc<Cell<usize>>,
+    }
+    impl Render for Reader {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            self.builds.set(self.builds.get() + 1);
+            div().child(self.shared.read(cx).to_string())
+        }
+    }
+
+    struct Host(Option<Entity<Reader>>);
+    impl Render for Host {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().children(self.0.as_ref().map(|child| {
+                child
+                    .clone()
+                    .cached(StyleRefinement::default().w(px(100.)).h(px(20.)))
+            }))
+        }
+    }
+
+    let mut cx = TestAppContext::single();
+    let shared = cx.new(|_| 0usize);
+    let make_window = |cx: &mut TestAppContext| {
+        let builds = Rc::new(Cell::new(0));
+        let window = cx.add_window(|_, cx| {
+            Host(Some(cx.new(|_| Reader {
+                shared: shared.clone(),
+                builds: builds.clone(),
+            })))
+        });
+        (window, builds)
+    };
+    let (first, first_builds) = make_window(&mut cx);
+    let (second, second_builds) = make_window(&mut cx);
+    cx.run_until_parked();
+    let readers = |cx: &TestAppContext| {
+        cx.read(|app| {
+            app.window_invalidators_by_entity
+                .get(&shared.entity_id())
+                .map(|windows| windows.len())
+        })
+    };
+    assert_eq!(readers(&cx), Some(2));
+    let before = (first_builds.get(), second_builds.get());
+    assert!(before.0 > 0 && before.1 > 0);
+    for window in [first, second] {
+        window.update(&mut cx, |_, _, cx| cx.notify()).unwrap();
+    }
+    cx.run_until_parked();
+    assert_eq!((first_builds.get(), second_builds.get()), before);
+    assert_eq!(readers(&cx), Some(2));
+    shared.update(&mut cx, |value, cx| {
+        *value += 1;
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert!(first_builds.get() > before.0 && second_builds.get() > before.1);
+
+    first
+        .update(&mut cx, |host, _, cx| {
+            host.0.take();
+            cx.notify();
+        })
+        .unwrap();
+    cx.run_until_parked();
+    assert_eq!(readers(&cx), Some(1));
+    second
+        .update(&mut cx, |_, window, _| window.remove_window())
+        .unwrap();
+    cx.run_until_parked();
+    assert_eq!(readers(&cx), None);
+
+    let observed = Rc::new(Cell::new(0));
+    let count = observed.clone();
+    let _subscription =
+        cx.update(|app| app.observe(&shared, move |_, _| count.set(count.get() + 1)));
+    shared.update(&mut cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    assert_eq!(observed.get(), 1);
+    assert_eq!(readers(&cx), None);
+}
+
+#[test]
 fn merging_sorted_lists_shares_one_that_holds_the_other() {
     let all: Rc<[u32]> = Rc::from([1, 3, 5, 7]);
     let some: Rc<[u32]> = Rc::from([3, 7]);

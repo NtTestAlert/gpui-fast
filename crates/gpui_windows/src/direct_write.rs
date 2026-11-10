@@ -27,22 +27,22 @@ use crate::*;
 use gpui::*;
 
 #[derive(Debug)]
-struct FontInfo {
-    font_family_h: HSTRING,
-    font_face: IDWriteFontFace3,
-    features: IDWriteTypography,
-    fallbacks: Option<IDWriteFontFallback>,
-    font_collection: IDWriteFontCollection1,
+pub(crate) struct FontInfo {
+    pub(crate) font_family_h: HSTRING,
+    pub(crate) font_face: IDWriteFontFace3,
+    pub(crate) features: IDWriteTypography,
+    pub(crate) fallbacks: Option<IDWriteFontFallback>,
+    pub(crate) font_collection: IDWriteFontCollection1,
 }
 
 pub(crate) struct DirectWriteTextSystem {
-    components: DirectWriteComponents,
-    state: RwLock<DirectWriteState>,
+    pub(crate) components: DirectWriteComponents,
+    pub(crate) state: RwLock<DirectWriteState>,
 }
 
-struct DirectWriteComponents {
+pub(crate) struct DirectWriteComponents {
     locale: HSTRING,
-    factory: IDWriteFactory5,
+    pub(crate) factory: IDWriteFactory5,
     in_memory_loader: IDWriteInMemoryFontFileLoader,
     builder: IDWriteFontSetBuilder1,
     text_renderer: TextRendererWrapper,
@@ -69,15 +69,15 @@ struct GPUState {
     pixel_shader: ID3D11PixelShader,
 }
 
-struct DirectWriteState {
+pub(crate) struct DirectWriteState {
     /// Used to rasterize color glyphs. `None` while the platform is headless: shaping and
     /// layout don't need a GPU, and nothing is drawn.
     gpu_state: Option<GPUState>,
-    system_font_collection: IDWriteFontCollection1,
-    custom_font_collection: IDWriteFontCollection1,
-    fonts: Vec<FontInfo>,
+    pub(crate) system_font_collection: IDWriteFontCollection1,
+    pub(crate) custom_font_collection: IDWriteFontCollection1,
+    pub(crate) fonts: Vec<FontInfo>,
     font_to_font_id: HashMap<Font, FontId>,
-    font_info_cache: HashMap<usize, FontId>,
+    pub(crate) font_info_cache: HashMap<usize, FontId>,
     layout_line_scratch: Vec<u16>,
 }
 
@@ -331,8 +331,14 @@ impl DirectWriteState {
 
             let font_id = FontId(this.fonts.len());
             let font_face_key = info.font_face.cast::<IUnknown>().unwrap().as_raw().addr();
+            let fast_raster_id = crate::fast::direct_write::raster_id(
+                this,
+                &components.factory,
+                &info.font_face,
+                font_id,
+            );
             this.fonts.push(info);
-            this.font_info_cache.insert(font_face_key, font_id);
+            this.font_info_cache.insert(font_face_key, fast_raster_id);
             Some(font_id)
         };
 
@@ -624,6 +630,7 @@ impl DirectWriteState {
                 index_converter: StringIndexConverter::new(text),
                 runs: &mut runs,
                 width: 0.0,
+                fast_requested_font: (font_runs.len() == 1).then(|| font_runs[0].font_id),
             };
             text_layout.Draw(
                 Some((&raw mut renderer_context).cast::<c_void>().cast_const()),
@@ -1407,6 +1414,7 @@ struct RendererContext<'t, 'a, 'b> {
     index_converter: StringIndexConverter<'a>,
     runs: &'b mut Vec<ShapedRun>,
     width: f32,
+    fast_requested_font: Option<FontId>,
 }
 
 #[derive(Debug)]
@@ -1531,33 +1539,13 @@ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
             ));
         };
 
-        let font_face_key = font_face.cast::<IUnknown>().unwrap().as_raw().addr();
-        let font_id = context
-            .text_system
-            .font_info_cache
-            .get(&font_face_key)
-            .copied()
-            // in some circumstances, we might be getting served a FontFace that we did not create ourselves
-            // so create a new font from it and cache it accordingly. The usual culprit here seems to be Segoe UI Symbol
-            .map_or_else(
-                || {
-                    let font = font_face_to_font(font_face, &self.locale)
-                        .ok_or_else(|| Error::new(DWRITE_E_NOFONT, "Failed to create font"))?;
-                    let font_id = match context.text_system.font_to_font_id.get(&font) {
-                        Some(&font_id) => font_id,
-                        None => context
-                            .text_system
-                            .select_and_cache_font(context.components, &font)
-                            .ok_or_else(|| Error::new(DWRITE_E_NOFONT, "Failed to create font"))?,
-                    };
-                    context
-                        .text_system
-                        .font_info_cache
-                        .insert(font_face_key, font_id);
-                    windows::core::Result::Ok(font_id)
-                },
-                Ok,
-            )?;
+        let font_id = crate::fast::direct_write::shaped_font_id(
+            context.text_system,
+            context.components,
+            font_face,
+            &self.locale,
+            context.fast_requested_font,
+        )?;
 
         let color_font = unsafe { font_face.IsColorFont().as_bool() };
 
@@ -1738,21 +1726,8 @@ fn font_style_to_dwrite(style: FontStyle) -> DWRITE_FONT_STYLE {
     }
 }
 
-fn font_style_from_dwrite(value: DWRITE_FONT_STYLE) -> FontStyle {
-    match value.0 {
-        0 => FontStyle::Normal,
-        1 => FontStyle::Italic,
-        2 => FontStyle::Oblique,
-        _ => unreachable!(),
-    }
-}
-
 fn font_weight_to_dwrite(weight: FontWeight) -> DWRITE_FONT_WEIGHT {
     DWRITE_FONT_WEIGHT(weight.0 as i32)
-}
-
-fn font_weight_from_dwrite(value: DWRITE_FONT_WEIGHT) -> FontWeight {
-    FontWeight(value.0 as f32)
 }
 
 fn get_font_names_from_collection(
@@ -1777,20 +1752,6 @@ fn get_font_names_from_collection(
 
         result
     }
-}
-
-fn font_face_to_font(font_face: &IDWriteFontFace3, locale: &HSTRING) -> Option<Font> {
-    let localized_family_name = unsafe { font_face.GetFamilyNames().log_err() }?;
-    let family_name = get_name(localized_family_name, locale).log_err()?;
-    let weight = unsafe { font_face.GetWeight() };
-    let style = unsafe { font_face.GetStyle() };
-    Some(Font {
-        family: family_name.into(),
-        features: FontFeatures::default(),
-        weight: font_weight_from_dwrite(weight),
-        style: font_style_from_dwrite(style),
-        fallbacks: None,
-    })
 }
 
 // https://learn.microsoft.com/en-us/windows/win32/api/dwrite/ne-dwrite-dwrite_font_feature_tag
@@ -1855,7 +1816,7 @@ const fn make_direct_write_tag(tag_name: &str) -> DWRITE_FONT_FEATURE_TAG {
 }
 
 #[inline]
-fn get_name(string: IDWriteLocalizedStrings, locale: &HSTRING) -> Result<String> {
+pub(crate) fn get_name(string: IDWriteLocalizedStrings, locale: &HSTRING) -> Result<String> {
     let mut locale_name_index = 0u32;
     let mut exists = BOOL(0);
     unsafe { string.FindLocaleName(locale, &mut locale_name_index, &mut exists as _)? };

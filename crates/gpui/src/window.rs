@@ -59,7 +59,6 @@ use std::{
         Arc, Weak,
         atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
     },
-    thread::AccessError,
     time::Duration,
 };
 use uuid::Uuid;
@@ -339,14 +338,10 @@ slotmap::new_key_type! {
 }
 
 thread_local! {
-    /// Fallback arena used when no app-specific arena is active.
-    /// In production, each window draw sets CURRENT_ELEMENT_ARENA to the app's arena.
-    pub(crate) static ELEMENT_ARENA: RefCell<Arena> = RefCell::new(Arena::new(1024 * 1024));
-
     /// Points to the current App's element arena during draw operations.
     /// This allows multiple test Apps to have isolated arenas, preventing
     /// cross-session corruption when the scheduler interleaves their tasks.
-    static CURRENT_ELEMENT_ARENA: Cell<Option<*const RefCell<Arena>>> = const { Cell::new(None) };
+    pub(crate) static CURRENT_ELEMENT_ARENA: Cell<Option<*const RefCell<Arena>>> = const { Cell::new(None) };
 }
 
 /// Whether a window draw is currently in progress on this thread.
@@ -361,20 +356,6 @@ thread_local! {
 /// nested draw or panicking on the already-borrowed App.
 fn draw_in_progress() -> bool {
     CURRENT_ELEMENT_ARENA.with(|current| current.get().is_some())
-}
-
-/// Allocates an element in the current arena. Uses the app-specific arena if one
-/// is active (during draw), otherwise falls back to the thread-local ELEMENT_ARENA.
-#[inline(always)]
-pub(crate) fn with_element_arena<R>(callback: impl FnOnce(&mut Arena) -> R) -> R {
-    let mut callback = Some(callback);
-    let mut result = None;
-    let access = with_element_arena_erased(&mut |arena| {
-        result = Some(callback.take().expect("arena callback runs once")(arena));
-    });
-    drop(callback);
-    access.expect("cannot access a Thread Local Storage value during or after destruction");
-    result.expect("arena callback produces a result")
 }
 
 /// Scope guard that sets CURRENT_ELEMENT_ARENA for the duration of a draw
@@ -7962,19 +7943,6 @@ pub fn outline(
         border_widths: (1.).into(),
         border_color: border_color.into(),
         border_style,
-    }
-}
-
-#[inline(never)]
-fn with_element_arena_erased(callback: &mut dyn FnMut(&mut Arena)) -> Result<(), AccessError> {
-    if let Some(arena_pointer) = CURRENT_ELEMENT_ARENA.try_with(Cell::get)? {
-        // SAFETY: The pointer is valid for the duration of the draw operation
-        // that set it, and we're being called during that same draw.
-        let arena_cell = unsafe { &*arena_pointer };
-        callback(&mut arena_cell.borrow_mut());
-        Ok(())
-    } else {
-        ELEMENT_ARENA.try_with(|arena| callback(&mut arena.borrow_mut()))
     }
 }
 

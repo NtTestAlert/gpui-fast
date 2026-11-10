@@ -129,6 +129,11 @@ unchanged, and a new entry needs as good a reason.
   `fast::retained::ViewLayoutState` and `ViewPrepaintState`, opaque types, in
   place of `Option<AnyElement>`. `ViewElement` is `#[doc(hidden)]`, and the
   states are only ever handed back to it by GPUI.
+- With `test-support`, `App::tracked_render_entity_count` exposes the render
+  dependency index size for downstream lifetime regression tests.
+- The Windows crate re-exports only `DirectWriteTextSystem` internally from
+  `direct_write`. Its font state is visible to the face-identity hooks, but
+  must not be imported back into `direct_write` through its crate-wide glob.
 - `Scene` has a public `layers` field (`fast::layers::scene::SceneLayers`),
   and `gpui` exports `LayerKey`, `TileCoord`, `SceneLayers`, `LayerFrame`,
   `LayerContent` (a layer's content, in parts: one per row of a virtual
