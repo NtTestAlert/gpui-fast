@@ -2905,7 +2905,7 @@ impl Window {
     /// whose bounds don't intersect their content mask are culled at paint time and won't appear.
     #[cfg(any(test, feature = "test-support"))]
     pub fn painted_quads(&self) -> Vec<Quad> {
-        self.rendered_frame.scene.quads.clone()
+        crate::fast::layers::verify::painted_quads(&self.rendered_frame.scene)
     }
 
     /// Returns the underlines in the most recently rendered frame's scene.

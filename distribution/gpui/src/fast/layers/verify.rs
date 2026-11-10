@@ -1,3 +1,4 @@
+// Modified by NtTestAlert for the GPUI Fast fork.
 // Modified by Longbridge for gpui-fast.
 //! Checking scroll layers against drawing from scratch: a scene's composited
 //! tiles expanded into the content they were rasterized from, and what the
@@ -79,6 +80,7 @@ fn expand_layer(
     translation: Point<ScaledPixels>,
     viewport: &Bounds<ScaledPixels>,
     composited: &[TileCoord],
+    sequence_of: fn(&Scene) -> Vec<Primitive>,
 ) -> Vec<Primitive> {
     let mut scratch = Scene::default();
     for operation in layer.content.operations() {
@@ -100,7 +102,7 @@ fn expand_layer(
         }
     }
     scratch.finish();
-    let sequence = drawing_sequence(&scratch);
+    let sequence = sequence_of(&scratch);
     let side = layer.tile_size as f32;
     let first = |at: ScaledPixels| (at.0 / side).floor() as i32;
     let last = |start: ScaledPixels, end: ScaledPixels| {
@@ -129,14 +131,14 @@ fn expand_layer(
 
 /// What `scene` draws, with every composited scroll layer's tiles replaced
 /// by the content they were rasterized from, in drawing order.
-fn expanded_sequence(scene: &Scene) -> Vec<Primitive> {
+fn expanded_sequence(scene: &Scene, sequence_of: fn(&Scene) -> Vec<Primitive>) -> Vec<Primitive> {
     let mut composited: HashMap<
         LayerKey,
         (Point<ScaledPixels>, Bounds<ScaledPixels>, Vec<TileCoord>),
     > = HashMap::new();
     let mut first_tiles: Vec<(usize, LayerKey)> = Vec::new();
     let mut sequence = Vec::new();
-    for primitive in drawing_sequence(scene) {
+    for primitive in sequence_of(scene) {
         if let Primitive::PolychromeSprite(sprite) = &primitive
             && let Some((key, tile)) =
                 decode_layer_tile(sprite.tile.texture_id, sprite.tile.tile_id)
@@ -164,8 +166,59 @@ fn expanded_sequence(scene: &Scene) -> Vec<Primitive> {
     }
     for (at, key) in first_tiles.into_iter().rev() {
         let (translation, viewport, tiles) = &composited[&key];
-        let content = expand_layer(layer_frame(scene, key), *translation, viewport, tiles);
+        let content = expand_layer(
+            layer_frame(scene, key),
+            *translation,
+            viewport,
+            tiles,
+            sequence_of,
+        );
         sequence.splice(at..at, content);
+    }
+    sequence
+}
+
+/// Returns each quad's unclipped rectangle in window coordinates, translating
+/// layer content by its scroll offset. Its content mask includes the rectangular
+/// extents of all enclosing clips. A Quad cannot express per-pixel corner
+/// coverage or occlusion by later primitives.
+pub(crate) fn painted_quads(scene: &Scene) -> Vec<Quad> {
+    if scene.layers.frames.is_empty() {
+        return scene.quads.clone();
+    }
+    expanded_sequence(scene, quads_and_tiles)
+        .into_iter()
+        .filter_map(|primitive| match primitive {
+            Primitive::Quad(quad) => Some(quad),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Expand each rounded group at its place in the drawing sequence. Scroll
+/// tiles inside a group are resolved against that group's own layer frames.
+fn quads_and_tiles(scene: &Scene) -> Vec<Primitive> {
+    let mut sequence = Vec::new();
+    for primitive in drawing_sequence(scene) {
+        match primitive {
+            Primitive::Quad(_) => sequence.push(primitive),
+            Primitive::PolychromeSprite(sprite) => {
+                if let Some(child) =
+                    crate::fast::rounded_clip_scene::group_scene(scene, sprite.tile.texture_id)
+                {
+                    let mask = sprite.bounds.intersect(&sprite.content_mask.bounds);
+                    for mut child_primitive in expanded_sequence(child, quads_and_tiles) {
+                        clip_to(&mut child_primitive, &mask);
+                        if !clipped(&child_primitive).is_empty() {
+                            sequence.push(child_primitive);
+                        }
+                    }
+                } else if decode_layer_tile(sprite.tile.texture_id, sprite.tile.tile_id).is_some() {
+                    sequence.push(Primitive::PolychromeSprite(sprite));
+                }
+            }
+            _ => {}
+        }
     }
     sequence
 }
@@ -238,7 +291,7 @@ fn describe(primitive: &Primitive) -> String {
 /// depths, however they number their draw orders and whatever order they
 /// draw primitives that do not overlap in.
 pub(crate) fn drawn(scene: &Scene) -> Vec<String> {
-    let sequence = expanded_sequence(scene);
+    let sequence = expanded_sequence(scene, drawing_sequence);
     let clips: Vec<Bounds<ScaledPixels>> = sequence.iter().map(clipped).collect();
     let mut depths: Vec<u32> = Vec::with_capacity(sequence.len());
     for (ix, clip) in clips.iter().enumerate() {

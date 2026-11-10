@@ -1,3 +1,4 @@
+// Modified by NtTestAlert for the GPUI Fast fork.
 // Modified by Longbridge for gpui-fast.
 //! Frames drawn through scroll layers must match frames drawn without them.
 //!
@@ -158,6 +159,112 @@ fn a_composited_layer_expands_to_the_scene_drawn_directly() {
     assert!(
         drawn(&direct).len() > 3,
         "rows in the viewport are compared"
+    );
+}
+
+fn rounded_group(bounds: Bounds<ScaledPixels>, content: &Scene) -> Scene {
+    use crate::fast::rounded_clip::{ClipOperation, Shape, record};
+    let mut scene = Scene::default();
+    record(
+        &mut scene,
+        ClipOperation::Begin(Shape {
+            bounds,
+            radii: crate::Corners::all(ScaledPixels(4.)).map(|&radius| size(radius, radius)),
+        }),
+    );
+    scene.replay(0..content.len(), content);
+    record(&mut scene, ClipOperation::End);
+    scene.finish();
+    scene
+}
+
+#[test]
+fn painted_quads_observe_nested_rounded_groups_and_restore_sibling_masks() {
+    let probe = sp(6., 9., 55., 50.);
+    let mut content = Scene::default();
+    content.insert_primitive(quad(probe, sp(0., 15., 35., 100.), 0.2));
+    content.insert_primitive(quad(sp(41., 16., 3., 3.), WINDOW, 0.3));
+    let group = rounded_group(
+        sp(20., 5., 20., 25.),
+        &rounded_group(sp(10., 10., 40., 35.), &content),
+    );
+    assert!(group.quads.is_empty());
+
+    let mut scene = Scene::default();
+    scene.replay(0..group.len(), &group);
+    scene.insert_primitive(quad(probe, WINDOW, 0.4));
+    scene.finish();
+    let actual = crate::fast::layers::verify::painted_quads(&scene);
+    assert_eq!(actual.len(), 2);
+    assert_eq!(actual[0].bounds, probe);
+    assert_eq!(actual[0].content_mask.bounds, sp(20., 15., 15., 15.));
+    assert_eq!(actual[1].content_mask.bounds, WINDOW);
+}
+
+#[test]
+fn painted_quads_observe_a_rounded_row_once_across_two_scrolled_tiles() {
+    let (_, mut layered) = scenes(&[TileCoord { x: 0, y: 0 }, TileCoord { x: 0, y: 1 }], 0.);
+    let mut content = Scene::default();
+    content.insert_primitive(quad(sp(64., 490., 140., 50.), sp(80., 480., 90., 48.), 0.2));
+    layered.layers.frames[0].content = rounded_group(sp(60., 480., 130., 55.), &content).into();
+    let scene = rounded_group(sp(70., 85., 90., 45.), &layered);
+
+    let actual = crate::fast::layers::verify::painted_quads(&scene);
+    let rows: Vec<_> = actual
+        .iter()
+        .filter(|q| q.bounds == sp(64., 90., 140., 50.))
+        .collect();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].content_mask.bounds, sp(80., 85., 80., 43.));
+}
+
+#[test]
+fn window_painted_quads_follow_a_child_inside_rounded_overflow() {
+    struct View(bool);
+    impl Render for View {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl crate::IntoElement {
+            div()
+                .relative()
+                .size(px(64.))
+                .rounded(px(12.))
+                .overflow_hidden()
+                .children(self.0.then(|| {
+                    div()
+                        .absolute()
+                        .left(px(20.))
+                        .top(px(18.))
+                        .size(px(12.))
+                        .bg(crate::red())
+                }))
+        }
+    }
+    let mut cx = TestAppContext::single();
+    let window = cx.add_window(|_, _| View(false));
+    let red_quads = |cx: &mut TestAppContext| {
+        cx.update_window(window.into(), |_, window, cx| {
+            window.draw(cx).clear(cx);
+            window
+                .painted_quads()
+                .into_iter()
+                .filter(|quad| quad.background.as_solid() == Some(crate::red()))
+                .map(|quad| quad.bounds)
+                .collect::<Vec<_>>()
+        })
+        .unwrap()
+    };
+    assert!(red_quads(&mut cx).is_empty());
+    window
+        .update(&mut cx, |view, _, cx| {
+            view.0 = true;
+            cx.notify();
+        })
+        .unwrap();
+    let scale = cx
+        .update_window(window.into(), |_, window, _| window.scale_factor())
+        .unwrap();
+    assert_eq!(
+        red_quads(&mut cx),
+        [sp(20. * scale, 18. * scale, 12. * scale, 12. * scale)]
     );
 }
 

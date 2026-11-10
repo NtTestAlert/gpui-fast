@@ -1,3 +1,4 @@
+// Modified by NtTestAlert for the GPUI Fast fork.
 // Modified by Longbridge for gpui-fast.
 //! Transport rounded clip groups through the existing renderer layer graph.
 //! No public primitive or ContentMask layout changes. Texture ids in
@@ -19,6 +20,21 @@ use crate::{
 
 const CLIP_TEXTURE_BASE: u32 = 0xF100_0000;
 const GEOMETRY_KEY: LayerKey = LayerKey(u32::MAX);
+
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) fn group_scene(scene: &Scene, texture: AtlasTextureId) -> Option<&Scene> {
+    if texture.kind != AtlasTextureKind::Polychrome || texture.index < CLIP_TEXTURE_BASE {
+        return None;
+    }
+    let key = LayerKey(texture.index - crate::LAYER_TILE_TEXTURE_BASE);
+    scene
+        .layers
+        .frames
+        .iter()
+        .find(|frame| frame.tile_size == 0 && frame.key == key)?
+        .content
+        .scene()
+}
 
 /// Materialize private paint scopes as existing, renderer-readable layer
 /// objects. Preserve the original operation stream for retained paint ranges.
