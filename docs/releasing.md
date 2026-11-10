@@ -99,7 +99,11 @@ python script/check-upstream
 
 Preparation replaces distribution/. A custom destination must be inside
 target/. Generate a second copy there and compare every relative path and file
-hash; record the source commit, generator diff and comparison result.
+hash and Git executable mode; record the source commit, generator diff and comparison result.
+On Windows, audit generated modes against git ls-tree at source_commit and
+preserve executable index entries with git update-index --chmod=+x where needed.
+CI compares regeneration with the committed distribution before builds,
+including newly generated untracked files.
 The generator uses Bun's TOML parser and the frozen smol-toml serializer.
 
 Run standalone generated-workspace checks, rather than relying only on the

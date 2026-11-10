@@ -1,0 +1,240 @@
+# Modified by Longbridge for gpui-fast publication.
+# Modified by NtTestAlert for the GPUI Fast fork.
+[package]
+name = "gpui-fast-linux"
+version = "0.1.14"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+repository = "https://github.com/NtTestAlert/gpui-fast"
+homepage = "https://github.com/NtTestAlert/gpui-fast"
+readme = "README.md"
+documentation = "https://github.com/NtTestAlert/gpui-fast"
+description = "gpui_linux: GPUI with gpui-fast rendering and layout optimizations"
+autoexamples = false
+autobenches = false
+autotests = false
+authors = [ "Longbridge" ]
+include = [ "/src/**", "/resources/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE", "/NOTICE" ]
+
+[package.metadata.gpui-fast-fork]
+repository = "https://github.com/NtTestAlert/gpui-fast"
+source_commit = "056ef5dd4da8d55607eab9205bf463262d8305b6"
+source_url = "https://github.com/NtTestAlert/gpui-fast/tree/056ef5dd4da8d55607eab9205bf463262d8305b6"
+upstream_tag = "v0.1.14"
+upstream_commit = "a427a7d9a6072473ad092b1673cd5235f99284cc"
+import_commit = "bdae789de2ab285c7ae020506a6b62b0d0022367"
+zed_commit = "d2a4fb6ded7c470be25d1541281da3882495b65b"
+snapshot_version = "0.3.12"
+wgpu_repository = "https://github.com/gfx-rs/wgpu"
+wgpu_revision = "cddb2f5d80dc0009b2ef6767635140cacf90a007"
+source_ref = "refs/heads/atrophy-gpui-fast-0.1.14"
+applies_registry_patches = false
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-process]
+git = "https://github.com/zed-industries/async-process.git"
+rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-task]
+git = "https://github.com/zed-industries/async-task.git"
+rev = "015845a19fc31752c02367567d3b8900a406f9da"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.windows-capture]
+git = "https://github.com/zed-industries/windows-capture.git"
+rev = "f0d6c1b6691db75461b732f6d5ff56eed002eeb9"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.calloop]
+git = "https://github.com/zed-industries/calloop"
+rev = "eb6b4fd17b9af5ecc226546bdd04185391b3e265"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.khronos-egl]
+git = "https://github.com/zed-industries/khronos-egl"
+rev = "42214b36347b108fd9630ca6254b96dde59e04fe"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.wasm_thread]
+git = "https://github.com/zed-industries/wasm_thread"
+rev = "0cf96c7708dfb97ccf3da50347e25edcf75d6937"
+
+[package.metadata.gpui-fast-fork.registry_patch_versions]
+async-process = "2.5.0"
+async-task = "4.7.1"
+windows-capture = "1.4.3"
+calloop = "0.14.3"
+khronos-egl = "6.0.0"
+wasm_thread = "0.3.3"
+
+[lib]
+path = "src/gpui_linux.rs"
+doctest = false
+name = "gpui_linux"
+
+[features]
+default = [ "wayland", "x11" ]
+test-support = [ "gpui/test-support" ]
+wayland = [ "dep:accesskit_unix", "gpui_wgpu", "ashpd/wayland", "calloop-wayland-source", "wayland-backend", "wayland-client", "wayland-cursor", "wayland-protocols", "wayland-protocols-plasma", "wayland-protocols-wlr", "filedescriptor", "xkbcommon/wayland", "open", "gpui/wayland", "uuid/v5" ]
+x11 = [ "dep:accesskit_unix", "gpui_wgpu", "ashpd", "as-raw-xcb-connection", "x11rb", "xkbcommon/x11", "xim", "filedescriptor", "open", "scap?/x11" ]
+screen-capture = [ "gpui/screen-capture", "scap" ]
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies]
+calloop = "0.14.3"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.accesskit]
+version = "0.24.0"
+features = [ "enumn" ]
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.accesskit_unix]
+version = "0.22"
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.anyhow]
+version = "1.0.86"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.bytemuck]
+version = "1"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.collections]
+version = "=0.3.12"
+package = "gpui-pre-collections"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.futures]
+version = "0.3.34"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.gpui]
+default-features = false
+package = "gpui-fast"
+version = "^0.1.14"
+path = "../gpui"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.gpui_util]
+package = "gpui-pre-util"
+version = "=0.3.12"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.gpui_wgpu]
+optional = true
+features = [ "font-kit" ]
+package = "gpui-fast-wgpu"
+version = "^0.1.14"
+path = "../gpui_wgpu"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.http_client]
+package = "gpui-pre-http-client"
+version = "=0.3.12"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.libc]
+version = "0.2"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.log]
+version = "0.4"
+default-features = false
+features = [ "std" ]
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.parking_lot]
+version = "0.12.1"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.smallvec]
+version = "1.6"
+features = [ "union", "const_new" ]
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.smol]
+version = "2.0"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.strum]
+version = "0.28"
+features = [ "derive" ]
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.url]
+version = "2.2"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.uuid]
+version = "1.1"
+features = [ "serde" ]
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.oo7]
+version = "0.6"
+default-features = false
+features = [ "async-std", "native_crypto" ]
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.notify-rust]
+version = "4"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.raw-window-handle]
+version = "0.6"
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.ashpd]
+version = "0.13"
+default-features = false
+features = [ "async-io", "inhibit", "open_uri", "file_chooser", "settings" ]
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.filedescriptor]
+version = "0.8.2"
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.open]
+version = "5.2.0"
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.xkbcommon]
+version = "0.8"
+default-features = false
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.scap]
+git = "https://github.com/zed-industries/scap"
+rev = "4afea48c3b002197176fb19cd0f9b180dd36eaac"
+default-features = false
+package = "zed-scap"
+version = "0.0.8-zed"
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.calloop-wayland-source]
+version = "0.4.1"
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.wayland-backend]
+version = "0.3.15"
+features = [ "client_system", "dlopen", "log" ]
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.wayland-client]
+version = "0.31.11"
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.wayland-cursor]
+version = "0.31.11"
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.wayland-protocols]
+version = "0.32.9"
+features = [ "client", "staging", "unstable" ]
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.wayland-protocols-plasma]
+version = "0.3.9"
+features = [ "client" ]
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.wayland-protocols-wlr]
+version = "0.3.9"
+features = [ "client" ]
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.as-raw-xcb-connection]
+version = "1"
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.x11rb]
+version = "0.13.1"
+features = [ "allow-unsafe-code", "xkb", "randr", "xinput", "cursor", "resource_manager", "sync", "dri3", "shape" ]
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.xim]
+git = "https://github.com/zed-industries/xim-rs.git"
+rev = "16f35a2c881b815a2b6cdfd6687988e84f8447d8"
+features = [ "x11rb-xcb", "x11rb-client" ]
+package = "zed-xim"
+version = "0.4.0-zed"
+optional = true
+
+[lints.rust.unexpected_cfgs]
+level = "allow"

@@ -10,6 +10,7 @@ on:
       - 'script/*release*'
       - 'script/prepare-consumer.ts'
       - 'docs/releasing.md'
+      - 'distribution/**'
   workflow_dispatch:
 
 permissions:
@@ -58,6 +59,15 @@ jobs:
           bun script/prepare-release.ts --tag v0.1.14
           bun script/prepare-consumer.ts --dest target/consumer-default
           bun script/prepare-consumer.ts --dest target/consumer-capture --capture
+      - name: Compare regeneration with committed distribution
+        shell: bash
+        run: |
+          git diff --exit-code HEAD -- distribution
+          untracked="$(git ls-files --others -- distribution)"
+          if test -n "$untracked"; then
+            printf '%s\n' "$untracked"
+            exit 1
+          fi
       - name: Check standalone default graphs
         run: |
           cargo check --manifest-path distribution/Cargo.toml --workspace --lib

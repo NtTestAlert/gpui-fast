@@ -1,0 +1,160 @@
+# Modified by Longbridge for gpui-fast publication.
+# Modified by NtTestAlert for the GPUI Fast fork.
+[package]
+name = "gpui-fast-web"
+version = "0.1.14"
+publish = false
+edition = "2024"
+license = "Apache-2.0"
+autoexamples = false
+repository = "https://github.com/NtTestAlert/gpui-fast"
+homepage = "https://github.com/NtTestAlert/gpui-fast"
+readme = "README.md"
+documentation = "https://github.com/NtTestAlert/gpui-fast"
+description = "gpui_web: GPUI with gpui-fast rendering and layout optimizations"
+autobenches = false
+autotests = false
+authors = [ "Longbridge" ]
+include = [ "/src/**", "/resources/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE", "/NOTICE" ]
+
+[package.metadata.gpui-fast-fork]
+repository = "https://github.com/NtTestAlert/gpui-fast"
+source_commit = "056ef5dd4da8d55607eab9205bf463262d8305b6"
+source_url = "https://github.com/NtTestAlert/gpui-fast/tree/056ef5dd4da8d55607eab9205bf463262d8305b6"
+upstream_tag = "v0.1.14"
+upstream_commit = "a427a7d9a6072473ad092b1673cd5235f99284cc"
+import_commit = "bdae789de2ab285c7ae020506a6b62b0d0022367"
+zed_commit = "d2a4fb6ded7c470be25d1541281da3882495b65b"
+snapshot_version = "0.3.12"
+wgpu_repository = "https://github.com/gfx-rs/wgpu"
+wgpu_revision = "cddb2f5d80dc0009b2ef6767635140cacf90a007"
+source_ref = "refs/heads/atrophy-gpui-fast-0.1.14"
+applies_registry_patches = false
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-process]
+git = "https://github.com/zed-industries/async-process.git"
+rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-task]
+git = "https://github.com/zed-industries/async-task.git"
+rev = "015845a19fc31752c02367567d3b8900a406f9da"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.windows-capture]
+git = "https://github.com/zed-industries/windows-capture.git"
+rev = "f0d6c1b6691db75461b732f6d5ff56eed002eeb9"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.calloop]
+git = "https://github.com/zed-industries/calloop"
+rev = "eb6b4fd17b9af5ecc226546bdd04185391b3e265"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.khronos-egl]
+git = "https://github.com/zed-industries/khronos-egl"
+rev = "42214b36347b108fd9630ca6254b96dde59e04fe"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.wasm_thread]
+git = "https://github.com/zed-industries/wasm_thread"
+rev = "0cf96c7708dfb97ccf3da50347e25edcf75d6937"
+
+[package.metadata.gpui-fast-fork.registry_patch_versions]
+async-process = "2.5.0"
+async-task = "4.7.1"
+windows-capture = "1.4.3"
+calloop = "0.14.3"
+khronos-egl = "6.0.0"
+wasm_thread = "0.3.3"
+
+[features]
+default = [ "multithreaded" ]
+multithreaded = [ "dep:wasm_thread", "scheduler/wasm-threads" ]
+
+[lib]
+path = "src/gpui_web.rs"
+doctest = false
+name = "gpui_web"
+
+[dependencies]
+unicode-properties = "=0.1.3"
+
+[dependencies.unicode-script]
+version = "0.5.7"
+
+[dependencies.unicode-segmentation]
+version = "1.10"
+
+[target."cfg(target_family = \"wasm\")".dependencies.gpui]
+default-features = false
+package = "gpui-fast"
+version = "^0.1.14"
+path = "../gpui"
+
+[target."cfg(target_family = \"wasm\")".dependencies.scheduler]
+package = "gpui-pre-scheduler"
+version = "=0.3.12"
+
+[target."cfg(target_family = \"wasm\")".dependencies.parking_lot]
+version = "0.12.1"
+features = [ "nightly" ]
+
+[target."cfg(target_family = \"wasm\")".dependencies.gpui_wgpu]
+package = "gpui-fast-wgpu"
+version = "^0.1.14"
+path = "../gpui_wgpu"
+
+[target."cfg(target_family = \"wasm\")".dependencies.http_client]
+package = "gpui-pre-http-client"
+version = "=0.3.12"
+
+[target."cfg(target_family = \"wasm\")".dependencies.anyhow]
+version = "1.0.86"
+
+[target."cfg(target_family = \"wasm\")".dependencies.async-channel]
+version = "2.5"
+default-features = false
+
+[target."cfg(target_family = \"wasm\")".dependencies.futures]
+version = "0.3.34"
+
+[target."cfg(target_family = \"wasm\")".dependencies.log]
+version = "0.4"
+default-features = false
+features = [ "std" ]
+
+[target."cfg(target_family = \"wasm\")".dependencies.uuid]
+version = "1.1"
+features = [ "serde" ]
+
+[target."cfg(target_family = \"wasm\")".dependencies.wasm-bindgen]
+version = "0.2.120"
+
+[target."cfg(target_family = \"wasm\")".dependencies.wasm-bindgen-futures]
+version = "0.4"
+
+[target."cfg(target_family = \"wasm\")".dependencies.web-time]
+version = "1.1.0"
+
+[target."cfg(target_family = \"wasm\")".dependencies.console_error_panic_hook]
+version = "0.1.7"
+
+[target."cfg(target_family = \"wasm\")".dependencies.js-sys]
+version = "0.3"
+
+[target."cfg(target_family = \"wasm\")".dependencies.raw-window-handle]
+version = "0.6"
+
+[target."cfg(target_family = \"wasm\")".dependencies.smallvec]
+version = "1.6"
+features = [ "union", "const_new" ]
+
+[target."cfg(target_family = \"wasm\")".dependencies.wasm_thread]
+git = "https://github.com/zed-industries/wasm_thread"
+rev = "0cf96c7708dfb97ccf3da50347e25edcf75d6937"
+version = "0.3"
+features = [ "es_modules" ]
+optional = true
+
+[target."cfg(target_family = \"wasm\")".dependencies.web-sys]
+version = "0.3"
+features = [ "console", "Blob", "Clipboard", "ClipboardEvent", "ClipboardItem", "CompositionEvent", "CssStyleDeclaration", "DataTransfer", "DataTransferItem", "DataTransferItemList", "Document", "DomRect", "DragEvent", "Element", "EventTarget", "File", "FocusOptions", "HtmlCanvasElement", "HtmlElement", "HtmlTextAreaElement", "IdleDeadline", "IdleRequestOptions", "ImageData", "InputEvent", "KeyboardEvent", "Location", "MediaQueryList", "MouseEvent", "Navigator", "OffscreenCanvas", "OffscreenCanvasRenderingContext2d", "PointerEvent", "ReadableStream", "ReadableStreamDefaultReader", "ReadableStreamReadResult", "ResizeObserver", "ResizeObserverBoxOptions", "ResizeObserverEntry", "ResizeObserverSize", "ResizeObserverOptions", "Screen", "Storage", "TextMetrics", "VisualViewport", "Headers", "Request", "RequestCredentials", "RequestInit", "RequestRedirect", "Response", "WheelEvent", "Window" ]
+
+[lints.rust.unexpected_cfgs]
+level = "allow"

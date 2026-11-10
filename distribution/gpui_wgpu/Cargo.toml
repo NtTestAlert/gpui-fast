@@ -1,0 +1,171 @@
+# Modified by Longbridge for gpui-fast publication.
+# Modified by NtTestAlert for the GPUI Fast fork.
+[package]
+name = "gpui-fast-wgpu"
+version = "0.1.14"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+repository = "https://github.com/NtTestAlert/gpui-fast"
+homepage = "https://github.com/NtTestAlert/gpui-fast"
+readme = "README.md"
+documentation = "https://github.com/NtTestAlert/gpui-fast"
+description = "gpui_wgpu: GPUI with gpui-fast rendering and layout optimizations"
+autoexamples = false
+autobenches = false
+autotests = false
+authors = [ "Longbridge" ]
+include = [ "/src/**", "/resources/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE", "/NOTICE" ]
+
+[package.metadata.gpui-fast-fork]
+repository = "https://github.com/NtTestAlert/gpui-fast"
+source_commit = "056ef5dd4da8d55607eab9205bf463262d8305b6"
+source_url = "https://github.com/NtTestAlert/gpui-fast/tree/056ef5dd4da8d55607eab9205bf463262d8305b6"
+upstream_tag = "v0.1.14"
+upstream_commit = "a427a7d9a6072473ad092b1673cd5235f99284cc"
+import_commit = "bdae789de2ab285c7ae020506a6b62b0d0022367"
+zed_commit = "d2a4fb6ded7c470be25d1541281da3882495b65b"
+snapshot_version = "0.3.12"
+wgpu_repository = "https://github.com/gfx-rs/wgpu"
+wgpu_revision = "cddb2f5d80dc0009b2ef6767635140cacf90a007"
+source_ref = "refs/heads/atrophy-gpui-fast-0.1.14"
+applies_registry_patches = false
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-process]
+git = "https://github.com/zed-industries/async-process.git"
+rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-task]
+git = "https://github.com/zed-industries/async-task.git"
+rev = "015845a19fc31752c02367567d3b8900a406f9da"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.windows-capture]
+git = "https://github.com/zed-industries/windows-capture.git"
+rev = "f0d6c1b6691db75461b732f6d5ff56eed002eeb9"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.calloop]
+git = "https://github.com/zed-industries/calloop"
+rev = "eb6b4fd17b9af5ecc226546bdd04185391b3e265"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.khronos-egl]
+git = "https://github.com/zed-industries/khronos-egl"
+rev = "42214b36347b108fd9630ca6254b96dde59e04fe"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.wasm_thread]
+git = "https://github.com/zed-industries/wasm_thread"
+rev = "0cf96c7708dfb97ccf3da50347e25edcf75d6937"
+
+[package.metadata.gpui-fast-fork.registry_patch_versions]
+async-process = "2.5.0"
+async-task = "4.7.1"
+windows-capture = "1.4.3"
+calloop = "0.14.3"
+khronos-egl = "6.0.0"
+wasm_thread = "0.3.3"
+
+[lib]
+path = "src/gpui_wgpu.rs"
+doctest = false
+name = "gpui_wgpu"
+
+[features]
+default = []
+bench-support = [ "gpui/bench-support", "dep:image" ]
+font-kit = [ "dep:font-kit" ]
+test-support = [ "gpui/test-support", "dep:image" ]
+
+[dependencies]
+cosmic-text = "0.19.0"
+
+[dependencies.gpui]
+default-features = false
+package = "gpui-fast"
+version = "^0.1.14"
+path = "../gpui"
+
+[dependencies.anyhow]
+version = "1.0.86"
+
+[dependencies.bytemuck]
+version = "1"
+
+[dependencies.collections]
+version = "=0.3.12"
+package = "gpui-pre-collections"
+
+[dependencies.etagere]
+version = "0.2"
+
+[dependencies.itertools]
+version = "0.14.0"
+
+[dependencies.image]
+version = "0.25.1"
+default-features = false
+features = [ "bmp", "dds", "exr", "ff", "gif", "hdr", "ico", "jpeg", "png", "pnm", "qoi", "rayon", "tga", "tiff", "webp" ]
+optional = true
+
+[dependencies.log]
+version = "0.4"
+default-features = false
+features = [ "std" ]
+
+[dependencies.parking_lot]
+version = "0.12.1"
+
+[dependencies.profiling]
+version = "1"
+
+[dependencies.raw-window-handle]
+version = "0.6"
+
+[dependencies.smallvec]
+version = "1.6"
+features = [ "union", "const_new" ]
+
+[dependencies.swash]
+version = "0.2.6"
+
+[dependencies.unicode-bidi]
+version = "0.3.18"
+default-features = false
+features = [ "hardcoded-data" ]
+
+[dependencies.unicode-segmentation]
+version = "1.10"
+
+[dependencies.gpui_util]
+package = "gpui-pre-util"
+version = "=0.3.12"
+
+[dependencies.font-kit]
+git = "https://github.com/zed-industries/font-kit"
+rev = "94b0f28166665e8fd2f53ff6d268a14955c82269"
+package = "zed-font-kit"
+version = "0.14.1-zed"
+default-features = false
+optional = true
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies.wgpu]
+git = "https://github.com/gfx-rs/wgpu"
+rev = "cddb2f5d80dc0009b2ef6767635140cacf90a007"
+default-features = false
+features = [ "std", "metal", "gles", "vulkan", "wgsl", "webgpu" ]
+
+[target."cfg(not(any(target_os = \"linux\", target_os = \"freebsd\")))".dependencies.wgpu]
+git = "https://github.com/gfx-rs/wgpu"
+rev = "cddb2f5d80dc0009b2ef6767635140cacf90a007"
+default-features = true
+
+[target."cfg(target_family = \"wasm\")".dependencies.web-sys]
+version = "0.3"
+features = [ "HtmlCanvasElement" ]
+
+[target."cfg(target_family = \"wasm\")".dependencies.wgpu]
+git = "https://github.com/gfx-rs/wgpu"
+rev = "cddb2f5d80dc0009b2ef6767635140cacf90a007"
+default-features = false
+features = [ "webgl" ]
+
+[lints.rust.unexpected_cfgs]
+level = "allow"

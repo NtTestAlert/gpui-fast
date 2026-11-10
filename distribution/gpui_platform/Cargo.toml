@@ -1,0 +1,138 @@
+# Modified by Longbridge for gpui-fast publication.
+# Modified by NtTestAlert for the GPUI Fast fork.
+[package]
+name = "gpui-fast-platform"
+version = "0.1.14"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+repository = "https://github.com/NtTestAlert/gpui-fast"
+homepage = "https://github.com/NtTestAlert/gpui-fast"
+readme = "README.md"
+documentation = "https://github.com/NtTestAlert/gpui-fast"
+description = "gpui_platform: GPUI with gpui-fast rendering and layout optimizations"
+autoexamples = false
+autobenches = false
+autotests = false
+authors = [ "Longbridge" ]
+include = [ "/src/**", "/resources/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE", "/NOTICE" ]
+
+[package.metadata.gpui-fast-fork]
+repository = "https://github.com/NtTestAlert/gpui-fast"
+source_commit = "056ef5dd4da8d55607eab9205bf463262d8305b6"
+source_url = "https://github.com/NtTestAlert/gpui-fast/tree/056ef5dd4da8d55607eab9205bf463262d8305b6"
+upstream_tag = "v0.1.14"
+upstream_commit = "a427a7d9a6072473ad092b1673cd5235f99284cc"
+import_commit = "bdae789de2ab285c7ae020506a6b62b0d0022367"
+zed_commit = "d2a4fb6ded7c470be25d1541281da3882495b65b"
+snapshot_version = "0.3.12"
+wgpu_repository = "https://github.com/gfx-rs/wgpu"
+wgpu_revision = "cddb2f5d80dc0009b2ef6767635140cacf90a007"
+source_ref = "refs/heads/atrophy-gpui-fast-0.1.14"
+applies_registry_patches = false
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-process]
+git = "https://github.com/zed-industries/async-process.git"
+rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-task]
+git = "https://github.com/zed-industries/async-task.git"
+rev = "015845a19fc31752c02367567d3b8900a406f9da"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.windows-capture]
+git = "https://github.com/zed-industries/windows-capture.git"
+rev = "f0d6c1b6691db75461b732f6d5ff56eed002eeb9"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.calloop]
+git = "https://github.com/zed-industries/calloop"
+rev = "eb6b4fd17b9af5ecc226546bdd04185391b3e265"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.khronos-egl]
+git = "https://github.com/zed-industries/khronos-egl"
+rev = "42214b36347b108fd9630ca6254b96dde59e04fe"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.wasm_thread]
+git = "https://github.com/zed-industries/wasm_thread"
+rev = "0cf96c7708dfb97ccf3da50347e25edcf75d6937"
+
+[package.metadata.gpui-fast-fork.registry_patch_versions]
+async-process = "2.5.0"
+async-task = "4.7.1"
+windows-capture = "1.4.3"
+calloop = "0.14.3"
+khronos-egl = "6.0.0"
+wasm_thread = "0.3.3"
+
+[lib]
+path = "src/gpui_platform.rs"
+doctest = false
+name = "gpui_platform"
+
+[features]
+default = [ "multithreaded" ]
+multithreaded = [ "gpui_web/multithreaded" ]
+bench-support = [ "gpui/bench-support", "gpui_macos/bench-support", "gpui_wgpu/bench-support" ]
+font-kit = [ "gpui_macos/font-kit" ]
+inspector = [ "gpui/inspector" ]
+test-support = [ "gpui/test-support", "gpui_macos/test-support", "gpui_windows/test-support", "gpui_wgpu/test-support" ]
+screen-capture = [ "gpui/screen-capture", "gpui_macos/screen-capture", "gpui_windows/screen-capture", "gpui_linux/screen-capture" ]
+runtime_shaders = [ "gpui_macos/runtime_shaders", "gpui_ios/runtime_shaders" ]
+wayland = [ "gpui_linux/wayland" ]
+x11 = [ "gpui_linux/x11" ]
+
+[dependencies.anyhow]
+version = "1.0.86"
+
+[dependencies.gpui]
+default-features = false
+package = "gpui-fast"
+version = "^0.1.14"
+path = "../gpui"
+
+[target."cfg(target_os = \"macos\")".dependencies.gpui_macos]
+default-features = false
+package = "gpui-fast-macos"
+version = "^0.1.14"
+path = "../gpui_macos"
+
+[target."cfg(target_os = \"ios\")".dependencies.gpui_ios]
+package = "gpui-fast-ios"
+version = "^0.1.14"
+path = "../gpui_ios"
+
+[target."cfg(target_os = \"windows\")".dependencies.gpui_windows]
+default-features = false
+package = "gpui-fast-windows"
+version = "^0.1.14"
+path = "../gpui_windows"
+
+[target."cfg(target_os = \"windows\")".dependencies.gpui]
+default-features = false
+features = [ "windows-manifest" ]
+package = "gpui-fast"
+version = "^0.1.14"
+path = "../gpui"
+
+[target."cfg(all(any(target_os = \"linux\", target_os = \"freebsd\"), not(target_env = \"ohos\")))".dependencies.gpui_linux]
+default-features = false
+package = "gpui-fast-linux"
+version = "^0.1.14"
+path = "../gpui_linux"
+
+[target."cfg(target_os = \"linux\")".dependencies.gpui_wgpu]
+optional = true
+package = "gpui-fast-wgpu"
+version = "^0.1.14"
+path = "../gpui_wgpu"
+
+[target."cfg(target_family = \"wasm\")".dependencies.gpui_web]
+default-features = false
+package = "gpui-fast-web"
+version = "^0.1.14"
+path = "../gpui_web"
+
+[target."cfg(target_family = \"wasm\")".dependencies.console_error_panic_hook]
+version = "0.1.7"
+
+[lints.rust.unexpected_cfgs]
+level = "allow"

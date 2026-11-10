@@ -1,0 +1,224 @@
+# Modified by Longbridge for gpui-fast publication.
+# Modified by NtTestAlert for the GPUI Fast fork.
+[package]
+name = "gpui-fast-macos"
+version = "0.1.14"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+repository = "https://github.com/NtTestAlert/gpui-fast"
+homepage = "https://github.com/NtTestAlert/gpui-fast"
+readme = "README.md"
+documentation = "https://github.com/NtTestAlert/gpui-fast"
+description = "gpui_macos: GPUI with gpui-fast rendering and layout optimizations"
+autoexamples = false
+autobenches = false
+autotests = false
+authors = [ "Longbridge" ]
+include = [ "/src/**", "/resources/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE", "/NOTICE" ]
+
+[package.metadata.gpui-fast-fork]
+repository = "https://github.com/NtTestAlert/gpui-fast"
+source_commit = "056ef5dd4da8d55607eab9205bf463262d8305b6"
+source_url = "https://github.com/NtTestAlert/gpui-fast/tree/056ef5dd4da8d55607eab9205bf463262d8305b6"
+upstream_tag = "v0.1.14"
+upstream_commit = "a427a7d9a6072473ad092b1673cd5235f99284cc"
+import_commit = "bdae789de2ab285c7ae020506a6b62b0d0022367"
+zed_commit = "d2a4fb6ded7c470be25d1541281da3882495b65b"
+snapshot_version = "0.3.12"
+wgpu_repository = "https://github.com/gfx-rs/wgpu"
+wgpu_revision = "cddb2f5d80dc0009b2ef6767635140cacf90a007"
+source_ref = "refs/heads/atrophy-gpui-fast-0.1.14"
+applies_registry_patches = false
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-process]
+git = "https://github.com/zed-industries/async-process.git"
+rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.async-task]
+git = "https://github.com/zed-industries/async-task.git"
+rev = "015845a19fc31752c02367567d3b8900a406f9da"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.windows-capture]
+git = "https://github.com/zed-industries/windows-capture.git"
+rev = "f0d6c1b6691db75461b732f6d5ff56eed002eeb9"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.calloop]
+git = "https://github.com/zed-industries/calloop"
+rev = "eb6b4fd17b9af5ecc226546bdd04185391b3e265"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.khronos-egl]
+git = "https://github.com/zed-industries/khronos-egl"
+rev = "42214b36347b108fd9630ca6254b96dde59e04fe"
+
+[package.metadata.gpui-fast-fork.registry_patches.crates-io.wasm_thread]
+git = "https://github.com/zed-industries/wasm_thread"
+rev = "0cf96c7708dfb97ccf3da50347e25edcf75d6937"
+
+[package.metadata.gpui-fast-fork.registry_patch_versions]
+async-process = "2.5.0"
+async-task = "4.7.1"
+windows-capture = "1.4.3"
+calloop = "0.14.3"
+khronos-egl = "6.0.0"
+wasm_thread = "0.3.3"
+
+[lib]
+path = "src/gpui_macos.rs"
+doctest = false
+name = "gpui_macos"
+
+[features]
+default = [ "gpui/default" ]
+bench-support = [ "gpui/bench-support", "gpui_apple/bench-support" ]
+test-support = [ "gpui/test-support", "gpui_apple/test-support" ]
+runtime_shaders = [ "gpui_apple/runtime_shaders" ]
+font-kit = [ "gpui_apple/font-kit" ]
+screen-capture = [ "gpui/screen-capture", "dep:objc2-core-media", "dep:objc2-screen-capture-kit" ]
+
+[dependencies.gpui]
+default-features = false
+package = "gpui-fast"
+version = "^0.1.14"
+path = "../gpui"
+
+[target."cfg(target_os = \"macos\")".dependencies.accesskit]
+version = "0.24.0"
+features = [ "enumn" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.accesskit_macos]
+version = "0.26.0"
+
+[target."cfg(target_os = \"macos\")".dependencies.anyhow]
+version = "1.0.86"
+
+[target."cfg(target_os = \"macos\")".dependencies.block2]
+version = "0.6"
+
+[target."cfg(target_os = \"macos\")".dependencies.collections]
+version = "=0.3.12"
+package = "gpui-pre-collections"
+
+[target."cfg(target_os = \"macos\")".dependencies.core-foundation]
+version = "0.10"
+
+[target."cfg(target_os = \"macos\")".dependencies.core-foundation-sys]
+version = "0.8.6"
+
+[target."cfg(target_os = \"macos\")".dependencies.core-graphics]
+version = "0.24"
+
+[target."cfg(target_os = \"macos\")".dependencies.ctor]
+version = "1.0.12"
+
+[target."cfg(target_os = \"macos\")".dependencies.dispatch2]
+version = "0.3"
+default-features = false
+features = [ "std", "block2", "objc2" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.foreign-types]
+version = "0.5"
+
+[target."cfg(target_os = \"macos\")".dependencies.futures]
+version = "0.3.34"
+
+[target."cfg(target_os = \"macos\")".dependencies.gpui_apple]
+package = "gpui-fast-apple"
+version = "^0.1.14"
+path = "../gpui_apple"
+
+[target."cfg(target_os = \"macos\")".dependencies.gpui_util]
+package = "gpui-pre-util"
+version = "=0.3.12"
+
+[target."cfg(target_os = \"macos\")".dependencies.image]
+version = "0.25.1"
+default-features = false
+features = [ "bmp", "dds", "exr", "ff", "gif", "hdr", "ico", "jpeg", "png", "pnm", "qoi", "rayon", "tga", "tiff", "webp" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.itertools]
+version = "0.14.0"
+
+[target."cfg(target_os = \"macos\")".dependencies.log]
+version = "0.4"
+default-features = false
+features = [ "std" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2]
+version = "0.6"
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-app-kit]
+version = "0.3.2"
+default-features = false
+features = [ "NSAlert", "NSAppearance", "NSApplication", "NSButton", "NSCell", "NSColor", "NSControl", "NSCursor", "NSDocumentController", "NSDragging", "NSDraggingItem", "NSEvent", "NSGraphics", "NSImage", "NSMenu", "NSMenuItem", "NSOpenPanel", "NSPanel", "NSPasteboard", "NSResponder", "NSRunningApplication", "NSSavePanel", "NSScreen", "NSScroller", "NSTrackingArea", "NSView", "NSVisualEffectView", "NSWindow", "NSWorkspace", "block2", "objc2-core-foundation", "objc2-uniform-type-identifiers" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-core-graphics]
+version = "=0.3.2"
+default-features = false
+features = [ "CGDirectDisplay", "CGColor", "objc2" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-core-media]
+version = "=0.3.2"
+default-features = false
+features = [ "CMSampleBuffer", "objc2-core-video" ]
+optional = true
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-core-video]
+version = "=0.3.2"
+default-features = false
+features = [ "CVBuffer", "CVImageBuffer", "CVHostTime" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-foundation]
+version = "=0.3.2"
+default-features = false
+features = [ "NSArray", "NSAttributedString", "NSBundle", "NSCoder", "NSData", "NSDate", "NSDictionary", "NSEnumerator", "NSError", "NSGeometry", "NSNull", "NSObjCRuntime", "NSObject", "NSProcessInfo", "NSRange", "NSRunLoop", "NSSet", "NSString", "NSURL", "NSValue", "objc2-core-foundation", "std" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-quartz-core]
+version = "=0.3.2"
+default-features = false
+features = [ "std", "CALayer", "CAMetalDisplayLink", "CAMetalLayer", "objc2-metal" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-screen-capture-kit]
+version = "=0.3.2"
+default-features = false
+features = [ "block2", "dispatch2", "objc2-core-graphics", "objc2-core-media", "SCShareableContent", "SCStream", "std" ]
+optional = true
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-uniform-type-identifiers]
+version = "0.3"
+default-features = false
+features = [ "std", "UTCoreTypes", "UTType" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.objc2-user-notifications]
+version = "0.3"
+default-features = false
+features = [ "std", "block2", "UNNotification", "UNNotificationAction", "UNNotificationCategory", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationTrigger", "UNUserNotificationCenter" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.parking_lot]
+version = "0.12.1"
+
+[target."cfg(target_os = \"macos\")".dependencies.raw-window-handle]
+version = "0.6"
+
+[target."cfg(target_os = \"macos\")".dependencies.scheduler]
+package = "gpui-pre-scheduler"
+version = "=0.3.12"
+
+[target."cfg(target_os = \"macos\")".dependencies.semver]
+version = "1.0"
+features = [ "serde" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.smallvec]
+version = "1.6"
+features = [ "union", "const_new" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.strum]
+version = "0.28"
+features = [ "derive" ]
+
+[target."cfg(target_os = \"macos\")".dependencies.uuid]
+version = "1.1"
+features = [ "serde" ]
+
+[lints.rust.unexpected_cfgs]
+level = "allow"
