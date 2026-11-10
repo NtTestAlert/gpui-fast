@@ -3,6 +3,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { extname, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
+import { stringify } from "smol-toml";
 import { DEST, ROOT, fastName, readConfig, readToml, run, type Manifest, type ReleaseConfig } from "./release-common";
 
 export function versionFromTag(tag: string): string {
@@ -54,7 +55,7 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
   const workspace = readToml(resolve(ROOT, "Cargo.toml")).workspace;
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
-  writeFileSync(resolve(dest, "Cargo.toml"), Bun.TOML.stringify({
+  writeFileSync(resolve(dest, "Cargo.toml"), stringify({
     workspace: { resolver: "2", members: config.crates },
   }));
   cpSync(resolve(ROOT, "rust-toolchain.toml"), resolve(dest, "rust-toolchain.toml"));
@@ -62,14 +63,14 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
   for (const name of config.crates) {
     const source = resolve(ROOT, "crates", name);
     const target = resolve(dest, name);
-    cpSync(source, target, { recursive: true });
+    cpSync(source, target, { recursive: true, dereference: true });
     const manifest = readToml(resolve(source, "Cargo.toml"));
     const pkg = manifest.package;
     Object.assign(pkg, {
-      name: fastName(name), version, publish: ["crates-io"],
+      name: fastName(name), version, publish: false,
       edition: workspace.package.edition, repository: config.repository,
       homepage: config.homepage, readme: "README.md", license: "Apache-2.0",
-      documentation: `https://docs.rs/${fastName(name)}/${version}/${name}/`,
+      documentation: config.repository,
       description: `${name}: GPUI with gpui-fast rendering and layout optimizations`,
       autoexamples: false, autobenches: false, autotests: false,
       authors: [...new Set([...(pkg.authors ?? []), "Longbridge"])],
@@ -101,7 +102,7 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
       manifest.features["screen-capture"].push("dep:windows-capture");
     }
     writeFileSync(resolve(target, "Cargo.toml"),
-      "# Modified by Longbridge for gpui-fast publication.\n" + Bun.TOML.stringify(manifest));
+      "# Modified by Longbridge for gpui-fast publication.\n" + stringify(manifest));
     cpSync(resolve(ROOT, "LICENSE"), resolve(target, "LICENSE"));
     const notices = [resolve(ROOT, "NOTICE"), resolve(source, "NOTICE")]
       .filter(existsSync).map(path => readFileSync(path, "utf8"));
@@ -110,7 +111,7 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
       `# ${fastName(name)}\n\nGPUI with gpui-fast rendering and layout optimizations.\n\n`
       + `Source and documentation: [${config.repository}](${config.repository}).\n\n`
       + "Forked from Zed's GPUI; distributed under Apache-2.0.\n\n"
-      + `Use the core as \`gpui = { package = "gpui-fast", version = "${version}" }\` to preserve paths emitted by its macros.\n`);
+      + `Use the core as \`gpui = { package = "gpui-fast", git = "${config.repository}", branch = "atrophy-dist-0.1.7" }\` to preserve paths emitted by its macros.\n`);
   }
 
   // cbindgen must read bundled inputs rather than a sibling registry package.
@@ -146,6 +147,16 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
         writeFileSync(file, "// Modified by Longbridge for gpui-fast.\n" + readFileSync(file, "utf8"));
       }
     }
+  }
+  // The distribution contains the fork's fixes in addition to upstream Fast changes.
+  for (const filename of [
+    "gpui/src/app.rs", "gpui/src/element.rs", "gpui/src/window.rs",
+    "gpui/src/fast/dependencies.rs", "gpui/src/fast/mod.rs", "gpui/src/fast/element_storage.rs",
+    "gpui_windows/src/direct_write.rs", "gpui_windows/src/gpui_windows.rs",
+    "gpui_windows/src/fast/mod.rs", "gpui_apple/src/fast/release_gpui/src/window.rs",
+  ]) {
+    const file = resolve(dest, filename);
+    writeFileSync(file, "// Modified by NtTestAlert for the GPUI Fast fork.\n" + readFileSync(file, "utf8"));
   }
   console.log(`Prepared ${config.crates.length} crates at ${dest}, version ${version}`);
 }

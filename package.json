@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "devDependencies": {
+    "smol-toml": "1.9.1"
+  }
+}
