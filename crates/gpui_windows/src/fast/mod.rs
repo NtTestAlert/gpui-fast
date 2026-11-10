@@ -9,6 +9,7 @@
 
 pub(crate) mod class_names;
 pub(crate) mod composition;
+pub(crate) mod direct_write;
 pub(crate) mod draw_state;
 pub(crate) mod frame;
 pub(crate) mod globals;
