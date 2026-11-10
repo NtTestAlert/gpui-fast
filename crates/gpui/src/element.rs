@@ -34,9 +34,9 @@
 #[cfg(any(feature = "inspector", debug_assertions))]
 use crate::InspectorElementPath;
 use crate::{
-    A11ySubtreeBuilder, App, ArenaBox, AvailableSpace, Bounds, Context, DispatchNodeId, ElementId,
+    A11ySubtreeBuilder, App, AvailableSpace, Bounds, Context, DispatchNodeId, ElementId,
     FocusHandle, InspectorElementId, LayoutId, Pixels, Point, Size, Style, Window,
-    util::FluentBuilder, window::with_element_arena,
+    util::FluentBuilder,
 };
 use std::{
     any::Any,
@@ -665,7 +665,7 @@ where
 }
 
 /// A dynamically typed element that can be used to store any element type.
-pub struct AnyElement(pub(crate) ArenaBox<dyn ElementObject>);
+pub struct AnyElement(pub(crate) crate::fast::element_storage::ElementStorage);
 
 impl AnyElement {
     pub(crate) fn new<E>(element: E) -> Self
@@ -673,9 +673,7 @@ impl AnyElement {
         E: 'static + Element,
         E::RequestLayoutState: Any,
     {
-        let element = with_element_arena(|arena| arena.alloc(|| Drawable::new(element)))
-            .map(|element| element as &mut dyn ElementObject);
-        AnyElement(element)
+        AnyElement(crate::fast::element_storage::new(element))
     }
 
     /// Attempt to downcast a reference to the boxed element to a specific type.

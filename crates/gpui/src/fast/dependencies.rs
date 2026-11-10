@@ -10,7 +10,58 @@ use std::{
 use collections::{FxHashMap, FxHashSet, TypeIdHashMap};
 use smallvec::SmallVec;
 
-use crate::{App, Context, Entity, EntityId, EntityMap, ListOffset};
+use crate::{
+    App, Context, Entity, EntityId, EntityMap, ListOffset, WindowId, window::WindowInvalidator,
+};
+
+#[cfg(any(test, feature = "test-support"))]
+impl App {
+    /// Number of entity keys in the render dependency index.
+    pub fn tracked_render_entity_count(&self) -> usize {
+        self.window_invalidators_by_entity.len()
+    }
+}
+
+pub(crate) fn remove_window_entity(app: &mut App, entity: EntityId, window: WindowId) {
+    if let Some(windows) = app.window_invalidators_by_entity.get_mut(&entity) {
+        windows.remove(&window);
+        if windows.is_empty() {
+            app.window_invalidators_by_entity.remove(&entity);
+        }
+    }
+}
+
+pub(crate) fn record_window_entities(
+    app: &mut App,
+    window: WindowId,
+    invalidator: WindowInvalidator,
+    entities: &FxHashSet<EntityId>,
+) {
+    let mut tracked = std::mem::take(app.tracked_entities.entry(window).or_default());
+    for &entity in tracked.difference(entities) {
+        remove_window_entity(app, entity, window);
+    }
+    for &entity in entities {
+        if !tracked.contains(&entity) {
+            app.window_invalidators_by_entity
+                .entry(entity)
+                .or_default()
+                .insert(window, invalidator.clone());
+        }
+        app.current_window_by_entity.insert(entity, window);
+    }
+    tracked.clear();
+    tracked.extend(entities.iter().copied());
+    app.tracked_entities.insert(window, tracked);
+}
+
+pub(crate) fn window_invalidators(app: &App, entity: EntityId) -> SmallVec<[WindowInvalidator; 2]> {
+    app.window_invalidators_by_entity
+        .get(&entity)
+        .into_iter()
+        .flat_map(|windows| windows.values().cloned())
+        .collect()
+}
 
 /// The app's side of recording what retained subtrees read: when each global
 /// last changed, and what was read while a recording is open.
