@@ -10,58 +10,7 @@ use std::{
 use collections::{FxHashMap, FxHashSet, TypeIdHashMap};
 use smallvec::SmallVec;
 
-use crate::{
-    App, Context, Entity, EntityId, EntityMap, ListOffset, WindowId, window::WindowInvalidator,
-};
-
-#[cfg(any(test, feature = "test-support"))]
-impl App {
-    /// Number of entity keys in the render dependency index.
-    pub fn tracked_render_entity_count(&self) -> usize {
-        self.window_invalidators_by_entity.len()
-    }
-}
-
-pub(crate) fn remove_window_entity(app: &mut App, entity: EntityId, window: WindowId) {
-    if let Some(windows) = app.window_invalidators_by_entity.get_mut(&entity) {
-        windows.remove(&window);
-        if windows.is_empty() {
-            app.window_invalidators_by_entity.remove(&entity);
-        }
-    }
-}
-
-pub(crate) fn record_window_entities(
-    app: &mut App,
-    window: WindowId,
-    invalidator: WindowInvalidator,
-    entities: &FxHashSet<EntityId>,
-) {
-    let mut tracked = std::mem::take(app.tracked_entities.entry(window).or_default());
-    for &entity in tracked.difference(entities) {
-        remove_window_entity(app, entity, window);
-    }
-    for &entity in entities {
-        if !tracked.contains(&entity) {
-            app.window_invalidators_by_entity
-                .entry(entity)
-                .or_default()
-                .insert(window, invalidator.clone());
-        }
-        app.current_window_by_entity.insert(entity, window);
-    }
-    tracked.clear();
-    tracked.extend(entities.iter().copied());
-    app.tracked_entities.insert(window, tracked);
-}
-
-pub(crate) fn window_invalidators(app: &App, entity: EntityId) -> SmallVec<[WindowInvalidator; 2]> {
-    app.window_invalidators_by_entity
-        .get(&entity)
-        .into_iter()
-        .flat_map(|windows| windows.values().cloned())
-        .collect()
-}
+use crate::{App, Context, Entity, EntityId, EntityMap, ListOffset};
 
 /// The app's side of recording what retained subtrees read: when each global
 /// last changed, and what was read while a recording is open.
@@ -516,7 +465,8 @@ impl App {
             offset_reads: 0..0,
         };
         self.entities.mark_access_boundary();
-        self.entities.extend_accessed(dependencies.entities.iter());
+        self.entities
+            .extend_accessed_recorded(dependencies.entities.iter());
         self.entities.mark_access_boundary();
         if self.entities.is_recording() {
             self.dependencies
@@ -674,6 +624,10 @@ pub(crate) struct EntityAccessLog {
 }
 
 impl EntityAccessLog {
+    pub(crate) fn update_generation(&self) -> u64 {
+        self.update_generation
+    }
+
     /// How many accesses the log holds.
     fn len(&self) -> usize {
         self.access_log.borrow().len()
@@ -718,6 +672,12 @@ impl EntityAccessLog {
 }
 
 impl EntityMap {
+    /// Whether `entity_id` has not been released. A leased entity is alive,
+    /// though its slot is empty while it is leased.
+    pub(crate) fn is_alive(&self, entity_id: EntityId) -> bool {
+        self.ref_counts.read().counts.contains_key(entity_id)
+    }
+
     /// Marks where the access log stands as a boundary between stretches.
     pub(crate) fn mark_access_boundary(&mut self) {
         let log = &mut self.access_log;
@@ -729,15 +689,21 @@ impl EntityMap {
         self.access_log.write_generation.get()
     }
 
-    pub fn extend_accessed<'a>(&mut self, entities: impl IntoIterator<Item = &'a EntityId>) {
-        let accessed_entities = self.accessed_entities.get_mut();
-        let recording = self.access_log.recordings.get() > 0;
-        for entity_id in entities {
-            accessed_entities.insert(*entity_id);
-            if recording {
-                self.access_log.access_log.borrow_mut().push(*entity_id);
-            }
+    /// Records entities accessed by a reused draw, as upstream's
+    /// [`EntityMap::extend_accessed`] does, and adds them to the access log
+    /// when a recording is open.
+    pub(crate) fn extend_accessed_recorded<'a>(
+        &mut self,
+        entities: impl IntoIterator<Item = &'a EntityId>,
+    ) {
+        let entities = entities.into_iter().copied();
+        if !self.is_recording() {
+            self.extend_accessed(entities);
+            return;
         }
+        let entities: SmallVec<[EntityId; 16]> = entities.collect();
+        self.extend_accessed(entities.iter().copied());
+        self.access_log.access_log.borrow_mut().extend(entities);
     }
 
     /// Whether any recording is open.
@@ -1302,6 +1268,31 @@ impl RenderDependencies {
             },
             ..self.clone()
         }
+    }
+
+    /// These dependencies without the entities that have been released,
+    /// which cannot change any more.
+    pub(crate) fn without_released_entities(mut self, cx: &App) -> Self {
+        if self
+            .entities
+            .iter()
+            .all(|entity| cx.entities.is_alive(*entity))
+        {
+            return self;
+        }
+        self.entities = self
+            .entities
+            .iter()
+            .copied()
+            .filter(|entity| cx.entities.is_alive(*entity))
+            .collect();
+        self
+    }
+
+    /// Whether these dependencies hold the very list of entities `other`
+    /// holds, as a union with nothing new to add leaves it.
+    pub(crate) fn shares_entities_with(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.entities, &other.entities)
     }
 
     /// Both sets of dependencies at once, as of the earlier generation, so

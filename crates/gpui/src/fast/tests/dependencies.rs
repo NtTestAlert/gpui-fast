@@ -5,6 +5,22 @@ use crate::fast::dependencies::merge_sorted;
 use std::rc::Rc;
 
 #[test]
+fn notifying_an_unrendered_entity_does_not_create_an_index_entry() {
+    use crate::{AppContext as _, TestAppContext};
+
+    let mut cx = TestAppContext::single();
+    let unseen = cx.new(|_| ());
+    unseen.update(&mut cx, |_, cx| cx.notify());
+    cx.run_until_parked();
+    cx.read(|app| {
+        assert!(
+            !app.window_invalidators_by_entity
+                .contains_key(&unseen.entity_id())
+        );
+    });
+}
+
+#[test]
 fn retained_reads_follow_mounted_children_and_open_windows() {
     use std::cell::Cell;
 

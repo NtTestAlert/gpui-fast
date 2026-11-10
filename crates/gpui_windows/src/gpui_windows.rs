@@ -23,9 +23,10 @@ mod wrapper;
 
 pub(crate) use clipboard::*;
 pub(crate) use destination_list::*;
-pub(crate) use direct_write::DirectWriteTextSystem;
+pub(crate) use direct_write::*;
 pub(crate) use directx_atlas::*;
 pub(crate) use directx_devices::*;
+pub(crate) use directx_renderer::FontInfo;
 pub(crate) use directx_renderer::*;
 pub(crate) use dispatcher::*;
 pub(crate) use display::*;

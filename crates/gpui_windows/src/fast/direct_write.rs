@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn feature_variant_keeps_requested_id_for_number_shaping() -> anyhow::Result<()> {
-        let system = DirectWriteTextSystem::new(None)?;
+        let system = DirectWriteTextSystem::new()?;
         let mut font = font("Consolas");
         let base = system.font_id(&font)?;
         font.features = FontFeatures(Arc::new(vec![("tnum".into(), 1)]));
@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn shaped_simulated_face_keeps_identity_and_reuses_aliases() -> anyhow::Result<()> {
-        let system = DirectWriteTextSystem::new(None)?;
+        let system = DirectWriteTextSystem::new()?;
         let base_id = system.font_id(&font("Arial"))?;
         let mut state = system.state.write();
         let simulated = unsafe {
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn simulated_and_variable_instances_keep_distinct_ids() -> anyhow::Result<()> {
-        let system = DirectWriteTextSystem::new(None)?;
+        let system = DirectWriteTextSystem::new()?;
         if let Err(error) = system.components.factory.cast::<IDWriteFactory6>() {
             if error.code() != windows::Win32::Foundation::E_NOINTERFACE {
                 return Err(error.into());
