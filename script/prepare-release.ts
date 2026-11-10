@@ -3,6 +3,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { extname, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
+import { stringify } from "smol-toml";
 import { DEST, ROOT, fastName, readConfig, readToml, run, type Manifest, type ReleaseConfig } from "./release-common";
 
 export function versionFromTag(tag: string): string {
@@ -66,7 +67,7 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
   const workspace = readToml(resolve(ROOT, "Cargo.toml")).workspace;
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
-  writeFileSync(resolve(dest, "Cargo.toml"), Bun.TOML.stringify({
+  writeFileSync(resolve(dest, "Cargo.toml"), stringify({
     workspace: { resolver: "2", members: config.crates },
   }));
   cpSync(resolve(ROOT, "rust-toolchain.toml"), resolve(dest, "rust-toolchain.toml"));
@@ -74,14 +75,14 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
   for (const name of config.crates) {
     const source = resolve(ROOT, "crates", name);
     const target = resolve(dest, name);
-    cpSync(source, target, { recursive: true });
+    cpSync(source, target, { recursive: true, dereference: true });
     const manifest = readToml(resolve(source, "Cargo.toml"));
     const pkg = manifest.package;
     Object.assign(pkg, {
-      name: fastName(name), version, publish: ["crates-io"],
+      name: fastName(name), version, publish: false,
       edition: workspace.package.edition, repository: config.repository,
       homepage: config.homepage, readme: "README.md", license: "Apache-2.0",
-      documentation: `https://docs.rs/${fastName(name)}/${version}/${name}/`,
+      documentation: config.repository,
       description: `${name}: GPUI with gpui-fast rendering and layout optimizations`,
       autoexamples: false, autobenches: false, autotests: false,
       authors: [...new Set([...(pkg.authors ?? []), "Longbridge"])],
@@ -113,7 +114,8 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
       manifest.features["screen-capture"].push("dep:windows-capture");
     }
     writeFileSync(resolve(target, "Cargo.toml"),
-      "# Modified by Longbridge for gpui-fast publication.\n" + Bun.TOML.stringify(manifest));
+      "# Modified by Longbridge for gpui-fast publication.\n"
+      + "# Modified by NtTestAlert for the GPUI Fast fork.\n" + stringify(manifest));
     cpSync(resolve(ROOT, "LICENSE"), resolve(target, "LICENSE"));
     const notices = [resolve(ROOT, "NOTICE"), resolve(source, "NOTICE")]
       .filter(existsSync).map(path => readFileSync(path, "utf8"));
@@ -122,7 +124,7 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
       `# ${fastName(name)}\n\nGPUI with gpui-fast rendering and layout optimizations.\n\n`
       + `Source and documentation: [${config.repository}](${config.repository}).\n\n`
       + "Forked from Zed's GPUI; distributed under Apache-2.0.\n\n"
-      + `Use the core as \`gpui = { package = "gpui-fast", version = "${version}" }\` to preserve paths emitted by its macros.\n`);
+      + `Use the core as \`gpui = { package = "gpui-fast", git = "${config.repository}", branch = "atrophy-dist-${version}" }\` to preserve paths emitted by its macros.\n`);
   }
 
   // cbindgen must read bundled inputs rather than a sibling registry package.
@@ -157,16 +159,23 @@ export function prepare(config: ReleaseConfig, version: string, dest = DEST): vo
 
   // Apache-2.0 section 4(b) requires change notices in distributed copies.
   const upstream = readToml(resolve(ROOT, "UPSTREAM"));
-  const changed = run([
-    "git", "diff", "--name-only", upstream.import_commit, "--", ...config.crates.map(name => "crates/" + name),
-  ], true).trim().split(/\r?\n/).filter(Boolean);
-  for (const filename of changed) {
-    const parts = relative(resolve(ROOT, "crates"), resolve(ROOT, filename)).split(sep);
-    const distributed = [resolve(dest, ...parts)];
-    if (parts[0] === "gpui" && parts[1] === "src") distributed.push(resolve(bundled, ...parts.slice(2)));
-    for (const file of distributed) {
-      if (existsSync(file) && statSync(file).isFile() && [".rs", ".metal", ".wgsl", ".hlsl"].includes(extname(file))) {
-        writeFileSync(file, "// Modified by Longbridge for gpui-fast.\n" + readFileSync(file, "utf8"));
+  const tag = "v" + version;
+  const changes = [
+    { revisions: [upstream.import_commit, tag], notice: "// Modified by Longbridge for gpui-fast." },
+    { revisions: [tag], notice: "// Modified by NtTestAlert for the GPUI Fast fork." },
+  ];
+  for (const { revisions, notice } of changes) {
+    const changed = run([
+      "git", "diff", "--name-only", ...revisions, "--", ...config.crates.map(name => "crates/" + name),
+    ], true).trim().split(/\r?\n/).filter(Boolean);
+    for (const filename of changed) {
+      const parts = relative(resolve(ROOT, "crates"), resolve(ROOT, filename)).split(sep);
+      const distributed = [resolve(dest, ...parts)];
+      if (parts[0] === "gpui" && parts[1] === "src") distributed.push(resolve(bundled, ...parts.slice(2)));
+      for (const file of distributed) {
+        if (existsSync(file) && statSync(file).isFile() && [".rs", ".metal", ".wgsl", ".hlsl"].includes(extname(file))) {
+          writeFileSync(file, notice + "\n" + readFileSync(file, "utf8"));
+        }
       }
     }
   }

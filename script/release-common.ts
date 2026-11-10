@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const DEST = resolve(ROOT, "target/release-workspace");
+export const DEST = resolve(ROOT, "distribution");
 
 export interface ReleaseConfig {
   snapshot_version: string;

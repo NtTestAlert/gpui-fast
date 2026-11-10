@@ -1,7 +1,7 @@
-# Metadata applied only to target/release-workspace, never upstream manifests.
+# Metadata applied only to the generated distribution workspace.
 snapshot_version = "0.3.10"
-repository = "https://github.com/longbridge/gpui-fast"
-homepage = "https://github.com/longbridge/gpui-fast"
+repository = "https://github.com/NtTestAlert/gpui-fast"
+homepage = "https://github.com/NtTestAlert/gpui-fast"
 # zed-scap's Windows backend requires the five-argument capture settings API.
 windows_capture_version = "=1.4.2"
 # Upstream pins a wgpu git revision for its unreleased Vulkan surface-drop fix

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { stringify } from "smol-toml";
 import { adaptToReleasedWgpu, dependency } from "./prepare-release";
 import { validate } from "./publish-release";
 import { fastName, readConfig, readToml } from "./release-common";
@@ -29,11 +30,11 @@ test("publication validates caret sibling requirements and rejects exact pins", 
       gpui_macros: dependency("gpui_macros", { path: "unused" }, {}, config, "0.1.6"),
     };
     for (const crate of release.crates) {
-      writeFileSync(resolve(root, crate, "Cargo.toml"), Bun.TOML.stringify(manifests[crate]));
+      writeFileSync(resolve(root, crate, "Cargo.toml"), stringify(manifests[crate]));
     }
     expect(validate(release, root)).toBe("0.1.6");
     manifests.gpui_platform.dependencies.gpui_macros.version = "=0.1.6";
-    writeFileSync(resolve(root, "gpui_platform/Cargo.toml"), Bun.TOML.stringify(manifests.gpui_platform));
+    writeFileSync(resolve(root, "gpui_platform/Cargo.toml"), stringify(manifests.gpui_platform));
     expect(() => validate(release, root)).toThrow("gpui_platform: inconsistent sibling version");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -90,14 +91,14 @@ test("Cargo can update only gpui-fast while its platform remains locked", () => 
   const writePackage = (name: string, version: string, dependencies = {}, source = "") => {
     const dir = resolve(root, name + "-" + version);
     mkdirSync(resolve(dir, "src"), { recursive: true });
-    writeFileSync(resolve(dir, "Cargo.toml"), Bun.TOML.stringify({
+    writeFileSync(resolve(dir, "Cargo.toml"), stringify({
       package: { name, version, edition: "2021" }, dependencies,
     }));
     writeFileSync(resolve(dir, "src/lib.rs"), source);
     patches[name + "-" + version.replaceAll(".", "-")] = { package: name, path: dir };
   };
   const writeConsumer = () => {
-    writeFileSync(resolve(root, "Cargo.toml"), Bun.TOML.stringify({
+    writeFileSync(resolve(root, "Cargo.toml"), stringify({
       package: { name: "consumer", version: "0.0.0", edition: "2021" },
       dependencies: { gpui: { package: "gpui-fast", version: "0.1.5" },
         platform: { package: "gpui-fast-platform", version: "0.1.5" } },
